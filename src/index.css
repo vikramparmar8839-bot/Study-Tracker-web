@@ -1,5 +1,7 @@
 @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
 
+@import "./liquid-glass.css";
+
 /* =========================================================
    ATTENDANCE TRACKER — single consolidated stylesheet
    Sections: tokens · base · layout · dashboard · attendance
