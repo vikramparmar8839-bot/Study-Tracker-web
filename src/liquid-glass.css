@@ -771,9 +771,9 @@ select:open {
       overlay .4s allow-discrete,
       display .4s allow-discrete;
   }
-  ::picker(select):popover-open { opacity: 1; transform: none; }
+  select:open::picker(select) { opacity: 1; transform: none; }
   @starting-style {
-    ::picker(select):popover-open { opacity: 0; transform: translateY(-8px) scale(.96); }
+    select:open::picker(select) { opacity: 0; transform: translateY(-8px) scale(.96); }
   }
 
   :root[data-studytrack-theme="light"] ::picker(select) {
