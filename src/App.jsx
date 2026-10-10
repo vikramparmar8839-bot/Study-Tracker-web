@@ -5,6 +5,12 @@ import PomodoroTimer, {
   POMODORO_STORAGE_KEY,
 } from "./PomodoroTimer";
 import "./index.css";
+import {
+  parseSyllabus,
+  extractPdfText as extractSyllabusText,
+  normalizeSyllabus,
+  getAllSubjects,
+} from "./syllabusParser";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
@@ -24,162 +30,6 @@ const DEFAULT_SETTINGS = {
   dailyStudyGoal: 180,
   theme: "dark",
 };
-
-const COURSES = [
-  { semester: 1, code: "1RABS1", name: "Applied Mathematics-I" },
-  { semester: 1, code: "1RABS2", name: "Applied Chemistry & Environment Science" },
-  { semester: 1, code: "1RMES3", name: "General Mechanical Engineering" },
-  { semester: 1, code: "1RTES4", name: "Basic Electronics" },
-  { semester: 1, code: "1RMES5", name: "Workshop Practice", noUnits: true },
-  { semester: 1, code: "1RAHS6", name: "Technical English" },
-  { semester: 1, code: "1RAHS7", name: "Design Thinking" },
-  { semester: 2, code: "2RABS1", name: "Applied Mathematics-II" },
-  { semester: 2, code: "2RABS2", name: "Applied Physics" },
-  { semester: 2, code: "2RCES3", name: "Computer Programming" },
-  { semester: 2, code: "2REES4", name: "Basic Electrical Engineering" },
-  { semester: 2, code: "2RMES5", name: "Engineering Graphics and Design" },
-  { semester: 2, code: "2RAHS6", name: "Humanities" },
-];
-
-const PAGE_HEADER =
-  /Institute of Engineering\s*&\s*Technology,\s*Devi Ahilya University,\s*Indore,\s*\(M\.P\.\),\s*India\.\s*\(Scheme Effective from July 2024\)\s*\d*/gi;
-
-const STOP_WORDS = [
-  "Course Outcome",
-  "BOOKS RECOMMENDED",
-  "Books Recommended",
-  "Text/Reference Books",
-  "List of Experiments",
-  "List of Practical",
-  "CO. No.",
-  "CO.No.",
-  "Course Learning Objective",
-  "Course Objective",
-  "Devi Ahilya University, Indore, India",
-];
-
-const UNIT_REGEX = /\b(?:UNIT|Unit)\s*[-–—]?\s*(I{1,3}|IV|V)\b/g;
-
-function normalizeText(text) {
-  return text.replace(PAGE_HEADER, " ").replace(/\s+/g, " ").trim();
-}
-
-function cleanTopic(text) {
-  return text
-    .replace(/^[•●▪◦*\-–—:,\.\s]+/, "")
-    .replace(/^\d+[.)]\s*/, "")
-    .replace(/[\s.,;:]+$/, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function splitUnitTopics(text) {
-  const parts = text
-    .split(/;|\s[-–—]\s|(?<!\.[a-z])\.\s+(?=[A-Z])/)
-    .map(cleanTopic)
-    .filter((t) => t.length > 2);
-  return parts.length ? parts : [cleanTopic(text)].filter(Boolean);
-}
-
-function cutAtStopWords(text) {
-  let end = text.length;
-  for (const word of STOP_WORDS) {
-    const i = text.indexOf(word);
-    if (i !== -1 && i < end) end = i;
-  }
-  return text.slice(0, end);
-}
-
-function parseUnits(blockText, code) {
-  const matches = [...blockText.matchAll(UNIT_REGEX)];
-  return matches
-    .map((m, i) => {
-      const start = m.index + m[0].length;
-      const end =
-        i + 1 < matches.length ? matches[i + 1].index : blockText.length;
-      const content = cutAtStopWords(blockText.slice(start, end));
-      const unitId = `${code}-u${m[1]}`;
-      return {
-        id: unitId,
-        name: `Unit ${m[1]}`,
-        topics: splitUnitTopics(content).map((name, k) => ({
-          id: `${unitId}-t${k}`,
-          name,
-          completed: false,
-        })),
-      };
-    })
-    .filter((u) => u.topics.length > 0);
-}
-
-function parseWorkshop(text, course) {
-  const shops = [];
-  const re =
-    /Introduction of and practice work on the (Fitting|Carpentry|Welding|Foundry|Machine|Plumbing)/g;
-  for (const m of text.matchAll(re)) {
-    const name = `${m[1]} shop`;
-    if (!shops.includes(name)) shops.push(name);
-  }
-  if (shops.length === 0) return null;
-  const unitId = `${course.code}-uShops`;
-  return {
-    id: course.code,
-    code: course.code,
-    name: course.name,
-    units: [
-      {
-        id: unitId,
-        name: "Trade Shops",
-        topics: shops.map((name, k) => ({
-          id: `${unitId}-t${k}`,
-          name,
-          completed: false,
-        })),
-      },
-    ],
-  };
-}
-
-function parseWholeSyllabus(rawText) {
-  const text = normalizeText(rawText);
-  const warnings = [];
-  const starts = [...text.matchAll(/\b(?:UNIT|Unit)\s*[-–—]?\s*I\b/g)].map(
-    (m) => m.index
-  );
-  const blocks = starts.map((s, i) =>
-    text.slice(s, i + 1 < starts.length ? starts[i + 1] : text.length)
-  );
-  const unitCourses = COURSES.filter((c) => !c.noUnits);
-  if (blocks.length !== unitCourses.length) {
-    warnings.push(
-      `Expected ${unitCourses.length} subjects with units but found ${blocks.length}. Some subjects may be missing or misnamed.`
-    );
-  }
-  const syllabus = { semester1: [], semester2: [] };
-  let blockIndex = 0;
-  for (const course of COURSES) {
-    let subject = null;
-    if (course.noUnits) {
-      subject = parseWorkshop(text, course);
-    } else if (blockIndex < blocks.length) {
-      const units = parseUnits(blocks[blockIndex++], course.code);
-      if (units.length) {
-        subject = {
-          id: course.code,
-          code: course.code,
-          name: course.name,
-          units,
-        };
-      }
-    }
-    if (subject) {
-      syllabus[course.semester === 1 ? "semester1" : "semester2"].push(subject);
-    } else {
-      warnings.push(`Could not read ${course.name}.`);
-    }
-  }
-  return { syllabus, warnings };
-}
 
 function getLocalDateKey(date = new Date()) {
   const year = date.getFullYear();
@@ -213,7 +63,7 @@ function App() {
   const [syllabus, setSyllabus] = useState(() => {
     try {
       const saved = localStorage.getItem("studytrack-full-syllabus");
-      return saved ? JSON.parse(saved) : null;
+      return saved ? normalizeSyllabus(JSON.parse(saved)) : null;
     } catch {
       return null;
     }
@@ -429,40 +279,8 @@ function App() {
   // =========================================================
 
   async function extractPdfText(file) {
-    if (!file) throw new Error("No PDF file selected.");
-
-    const arrayBuffer = await file.arrayBuffer();
-    if (!arrayBuffer || arrayBuffer.byteLength === 0) {
-      throw new Error("The selected PDF file is empty.");
-    }
-
     try {
-      const loadingTask = pdfjsLib.getDocument({
-        data: new Uint8Array(arrayBuffer),
-        useWorkerFetch: false,
-        isEvalSupported: false,
-        useSystemFonts: true,
-      });
-
-      const pdf = await loadingTask.promise;
-      const pages = [];
-
-      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
-        const pdfPage = await pdf.getPage(pageNumber);
-        const content = await pdfPage.getTextContent();
-        const text = content.items.map((item) => item?.str || "").join(" ");
-        pages.push(text);
-      }
-
-      const fullText = pages.join("\n").trim();
-
-      if (!fullText) {
-        throw new Error(
-          "PDF opened successfully, but no selectable text was found."
-        );
-      }
-
-      return fullText;
+      return await extractSyllabusText(pdfjsLib, file);
     } catch (error) {
       console.error("PDFJS ERROR:", error);
       throw new Error(
@@ -484,8 +302,9 @@ function App() {
 
     try {
       const text = await extractPdfText(file);
-      const { syllabus: parsed, warnings } = parseWholeSyllabus(text);
-      const allSubjects = [...parsed.semester1, ...parsed.semester2];
+      const { syllabus: parsed, warnings } = parseSyllabus(text);
+      console.log("Syllabus text sample:", text.slice(0, 1500));
+      const allSubjects = getAllSubjects(parsed);
       const totalSubjects = allSubjects.length;
       const totalUnits = allSubjects.reduce(
         (total, subject) => total + subject.units.length,
@@ -494,7 +313,7 @@ function App() {
 
       if (totalSubjects === 0) {
         alert(
-          "No syllabus subjects were detected. Please make sure this is the IET DAVV syllabus PDF."
+          "No syllabus subjects were detected. The PDF may be a scanned image or may not use Unit/Module headings."
         );
         setUploadingPdf(false);
         event.target.value = "";
@@ -612,10 +431,7 @@ function App() {
   function getOverallSyllabusProgress() {
     if (!syllabus) return 0;
 
-    const allSubjects = [
-      ...(syllabus.semester1 || []),
-      ...(syllabus.semester2 || []),
-    ];
+    const allSubjects = getAllSubjects(syllabus);
 
     const topics = allSubjects.flatMap((subject) =>
       subject.units.flatMap((unit) => unit.topics)
@@ -637,8 +453,10 @@ function App() {
         );
 
       return {
-        semester1: updateSemester(prev.semester1 || []),
-        semester2: updateSemester(prev.semester2 || []),
+        groups: (prev.groups || []).map((group) => ({
+          ...group,
+          subjects: updateSemester(group.subjects || []),
+        })),
       };
     });
   }
@@ -1208,9 +1026,7 @@ function App() {
   }
 
   function Syllabus() {
-    const allSubjects = syllabus
-      ? [...(syllabus.semester1 || []), ...(syllabus.semester2 || [])]
-      : [];
+    const allSubjects = getAllSubjects(syllabus);
 
     const selectedSubject = allSubjects.find(
       (subject) => subject.id === selectedSyllabusSubject
@@ -1239,9 +1055,8 @@ function App() {
             <div className="empty-icon">📚</div>
             <h2>Upload your syllabus</h2>
             <p>
-              Upload the complete IET DAVV syllabus PDF once. The app will
-              separate Semester I, Semester II, subjects, units and topics
-              automatically.
+              Upload any syllabus PDF (college scheme, JEE, NEET, etc.). The app
+              will detect subjects, units and topics automatically.
             </p>
             <label className="pdf-upload-button">
               📄 Choose PDF
@@ -1267,14 +1082,12 @@ function App() {
             </div>
 
             <div className="semester-tabs">
-              <div>
-                <h2>Semester I</h2>
-                {renderSemesterSubjects(syllabus.semester1)}
-              </div>
-              <div>
-                <h2>Semester II</h2>
-                {renderSemesterSubjects(syllabus.semester2)}
-              </div>
+              {(syllabus.groups || []).map((group) => (
+                <div key={group.id}>
+                  <h2>{group.label}</h2>
+                  {renderSemesterSubjects(group.subjects)}
+                </div>
+              ))}
             </div>
 
             {selectedSubject && (
@@ -1639,7 +1452,7 @@ function App() {
         if (!replace) return;
 
         setSubjects(backup.subjects);
-        setSyllabus(backup.syllabus || null);
+        setSyllabus(normalizeSyllabus(backup.syllabus));
         setTimetable(Array.isArray(backup.timetable) ? backup.timetable : []);
         setSettings({
           ...DEFAULT_SETTINGS,
