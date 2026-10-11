@@ -2188,13 +2188,15 @@ body {
   border-radius: 0;
   background: none;
   box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   cursor: pointer;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
   transform-origin: bottom center;
   animation: cat-breathe 3s ease-in-out infinite;
 }
-.cat-body:hover { background: none; box-shadow: none; transform: none; }
+.cat-body:hover { background: none; box-shadow: none; transform: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
 .cat-body:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 12px; }
 .cat-body svg { display: block; width: 100%; height: auto; overflow: visible; }
 
