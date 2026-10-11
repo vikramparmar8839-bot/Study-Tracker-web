@@ -829,3 +829,19 @@ select:open {
   :root { --lg-fill: rgba(30,38,54,.96); --lg-fill-strong: rgba(30,38,54,.98); --lg-fill-hover: rgba(36,46,66,.98); }
   :root[data-studytrack-theme="light"] { --lg-fill: rgba(255,255,255,.97); --lg-fill-strong: #fff; --lg-fill-hover: #fff; }
 }
+.pet-cat .cat-body,
+.pet-cat .cat-body::before,
+.pet-cat .cat-body::after {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  filter: none !important;
+  outline: none !important;
+}
+.pet-cat .cat-body::before,
+.pet-cat .cat-body::after {
+  content: none !important;
+  display: none !important;
+}
