@@ -594,6 +594,30 @@ function App() {
     1
   );
 
+  // Same rolling "last 7 days" window as weeklyStudyMinutes, split by subject
+  const weeklySubjectStudyTotals = useMemo(() => {
+    const weekStart = new Date();
+    weekStart.setHours(0, 0, 0, 0);
+    weekStart.setDate(weekStart.getDate() - 6);
+
+    const weekSessions = studySessions.filter((session) => {
+      const sessionDate = new Date(`${session.date}T12:00:00`);
+      return sessionDate >= weekStart;
+    });
+
+    return subjects.map((subject) => ({
+      name: subject.name,
+      minutes: weekSessions
+        .filter((session) => session.subject === subject.name)
+        .reduce((total, session) => total + Number(session.duration || 0), 0),
+    }));
+  }, [subjects, studySessions]);
+
+  const maxWeeklySubjectStudyMinutes = Math.max(
+    ...weeklySubjectStudyTotals.map((item) => item.minutes),
+    1
+  );
+
   function clearStudyHistory() {
     if (!studySessions.length) return;
 
@@ -733,7 +757,7 @@ function App() {
             <div className="panel-header">
               <div>
                 <h2>Study by Subject</h2>
-                <p>Where your study time is going.</p>
+                <p>Where your study time went in the last 7 days.</p>
               </div>
             </div>
 
@@ -742,7 +766,7 @@ function App() {
                 Start a focus session to see your study distribution.
               </p>
             ) : (
-              subjectStudyTotals.map((item) => (
+              weeklySubjectStudyTotals.map((item) => (
                 <div className="study-subject-row" key={item.name}>
                   <div className="study-subject-header">
                     <span>{item.name}</span>
@@ -752,7 +776,7 @@ function App() {
                     <div
                       style={{
                         width: `${
-                          (item.minutes / maxSubjectStudyMinutes) * 100
+                          (item.minutes / maxWeeklySubjectStudyMinutes) * 100
                         }%`,
                       }}
                     />
@@ -1826,11 +1850,11 @@ function App() {
             <div className="panel-header">
               <div>
                 <h2>Study by Subject</h2>
-                <p>Your total recorded focus time.</p>
+                <p>Your recorded focus time in the last 7 days.</p>
               </div>
             </div>
 
-            {subjectStudyTotals.map((item) => (
+            {weeklySubjectStudyTotals.map((item) => (
               <div className="study-subject-row" key={item.name}>
                 <div className="study-subject-header">
                   <span>{item.name}</span>
@@ -1840,7 +1864,7 @@ function App() {
                   <div
                     style={{
                       width: `${
-                        (item.minutes / maxSubjectStudyMinutes) * 100
+                        (item.minutes / maxWeeklySubjectStudyMinutes) * 100
                       }%`,
                     }}
                   />
