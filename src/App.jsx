@@ -9,6 +9,7 @@ import { useAuth } from "./context/AuthContext";
 import Leaderboard from "./pages/Leaderboard";
 import Friends from "./pages/Friends";
 import Groups from "./pages/Groups";
+import { useChatNotifications } from "./hooks/useChatNotifications";
 import {
   parseSyllabus,
   extractPdfText as extractSyllabusText,
@@ -53,6 +54,7 @@ function formatStudyTime(minutes) {
 
 function App() {
   const { profile, signOut, updateProfile } = useAuth();
+  const chatNotify = useChatNotifications();
   const [page, setPage] = useState("dashboard");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -2240,6 +2242,9 @@ function App() {
               onClick={() => navigateTo(key)}
             >
               {label}
+              {key === "groups" && chatNotify.total > 0 && (
+                <span className="nav-badge">{chatNotify.total > 9 ? "9+" : chatNotify.total}</span>
+              )}
             </button>
           ))}
         </nav>
@@ -2280,7 +2285,7 @@ function App() {
           {page === "statistics" && Statistics()}
           {page === "leaderboard" && <Leaderboard />}
           {page === "friends" && <Friends />}
-          {page === "groups" && <Groups />}
+          {page === "groups" && <Groups notify={chatNotify} />}
           {page === "settings" && Settings()}
         </div>
       </main>

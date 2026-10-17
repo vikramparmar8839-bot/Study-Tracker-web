@@ -205,3 +205,29 @@ export const listGroupMessages = (groupId, limit = 50) =>
     .limit(limit)
     .then(unwrap)
     .then((rows) => rows.reverse());
+// Paste at the bottom of src/lib/api.js (below the group chat functions)
+
+/** time of the newest message in a group (or null) */
+export const newestMessageAt = (groupId) =>
+  supabase
+    .from('group_messages')
+    .select('created_at')
+    .eq('group_id', groupId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+    .then(unwrap)
+    .then((row) => row?.created_at ?? null);
+
+/** how many messages from OTHER people arrived after `sinceIso` */
+export const countUnreadMessages = (groupId, sinceIso, myId) =>
+  supabase
+    .from('group_messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('group_id', groupId)
+    .neq('user_id', myId)
+    .gt('created_at', sinceIso)
+    .then(({ count, error }) => {
+      if (error) throw new Error(error.message);
+      return count ?? 0;
+    });

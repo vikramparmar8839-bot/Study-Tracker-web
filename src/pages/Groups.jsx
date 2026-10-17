@@ -23,33 +23,26 @@ function MemberStatus({ info }) {
   );
 }
 
-function GroupRoom({ group, onLeave }) {
+function GroupRoom({ group, onLeave, notify }) {
   const { user } = useAuth();
   const [rows, setRows] = useState([]);
   const [minutes, setMinutes] = useState(25);
   const [chatOpen, setChatOpen] = useState(false);
 
-  // chat lives here (not inside GroupChat) so new messages are counted while the chat is closed
+  // chat lives here (not inside GroupChat) so the history stays loaded when you hide it
   const chat = useGroupChat(group.id);
-  const readKey = `studytrack-chat-read:${group.id}`;
-  const [lastRead, setLastRead] = useState(() => {
-    try { return localStorage.getItem(readKey); } catch { return null; }
-  });
+  const unread = notify.unread[group.id] || 0;
   const newestAt = chat.messages.length ? chat.messages[chat.messages.length - 1].created_at : null;
 
-  // mark everything as read while the chat is open (and on the very first visit)
+  // tell the app-wide notifier whether this chat is open, and mark messages read while it is
   useEffect(() => {
-    if (chat.loading) return;
-    if (chatOpen || lastRead == null) {
-      const mark = newestAt ?? '1970-01-01T00:00:00.000Z';
-      setLastRead(mark);
-      try { localStorage.setItem(readKey, mark); } catch { /* storage unavailable */ }
-    }
-  }, [chat.loading, chatOpen, newestAt]); // eslint-disable-line react-hooks/exhaustive-deps
+    notify.setChatOpen(group.id, chatOpen);
+    return () => notify.setChatOpen(group.id, false);
+  }, [chatOpen, group.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const unread = lastRead == null ? 0 : chat.messages.filter(
-    (m) => m.user_id !== user.id && Date.parse(m.created_at) > Date.parse(lastRead),
-  ).length;
+  useEffect(() => {
+    if (chatOpen && !chat.loading) notify.markRead(group.id, newestAt);
+  }, [chatOpen, chat.loading, newestAt, group.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadBoard = useCallback(() => groupLeaderboard(group.id, 'week').then(setRows).catch(() => {}), [group.id]);
 
@@ -137,16 +130,27 @@ function GroupRoom({ group, onLeave }) {
         })}
       </ol>
 
-      <button className="ghost st-chat-toggle" onClick={() => setChatOpen((o) => !o)}>
+      <div className="st-chat-bar">
+      <button className="ghost" onClick={() => setChatOpen((o) => !o)}>
         💬 {chatOpen ? 'Hide chat' : 'Group chat'}
         {!chatOpen && unread > 0 && <span className="st-badge">{unread > 9 ? '9+' : unread}</span>}
       </button>
+      <button
+        type="button"
+        className="ghost st-sound-toggle"
+        onClick={notify.toggleSound}
+        title={notify.soundOn ? 'Chat sound on (click to mute)' : 'Chat sound off (click to turn on)'}
+        aria-label={notify.soundOn ? 'Mute chat sound' : 'Turn on chat sound'}
+      >
+        {notify.soundOn ? '🔔' : '🔕'}
+      </button>
+      </div>
       {chatOpen && <GroupChat chat={chat} />}
     </div>
   );
 }
 
-export default function Groups() {
+export default function Groups({ notify }) {
   const { user } = useAuth();
   const [groups, setGroups] = useState([]);
   const [name, setName] = useState('');
@@ -180,7 +184,7 @@ export default function Groups() {
       {msg && <p className="st-error">{msg}</p>}
 
       {groups.map((g) => (
-        <GroupRoom key={g.id} group={g} onLeave={(grp) => run(() => leaveGroup(grp.id, user.id))} />
+        <GroupRoom key={g.id} group={g} notify={notify} onLeave={(grp) => run(() => leaveGroup(grp.id, user.id))} />
       ))}
       {groups.length === 0 && <p className="st-muted">You're not in any group yet. Create one or paste an invite code.</p>}
     </section>
