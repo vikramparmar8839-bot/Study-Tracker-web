@@ -168,3 +168,23 @@ export const getServerOffsetMs = async () => {
   const t1 = Date.now();
   return new Date(serverIso).getTime() - (t0 + t1) / 2; // add to Date.now() to get server time
 };
+// Paste at the bottom of src/lib/api.js (replaces the "shared group timer" block once you remove the old UI)
+
+/* ---------------- per-member live status ---------------- */
+
+export const memberStatusSet = (groupId, state, paused, remainingSec, totalSec) =>
+  supabase
+    .rpc('member_status_set', {
+      p_group: groupId,
+      p_state: state,
+      p_paused: paused,
+      p_remaining_sec: remainingSec,
+      p_total_sec: totalSec,
+    })
+    .then(unwrap);
+
+export const memberStatusTouch = (groupId) =>
+  supabase.rpc('member_status_touch', { p_group: groupId }).then(unwrap);
+
+export const listMemberStatuses = (groupId) =>
+  supabase.from('group_member_status').select('*').eq('group_id', groupId).then(unwrap);

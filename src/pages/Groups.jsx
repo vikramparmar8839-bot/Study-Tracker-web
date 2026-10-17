@@ -1,9 +1,25 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { createGroup, joinGroup, listMyGroups, leaveGroup, groupLeaderboard } from '../lib/api';
-import { useGroupTimer, formatClock } from '../hooks/useGroupTimer';
+import { useMemberTimer } from '../hooks/useMemberTimer';
+import { useGroupPresence } from '../hooks/useGroupPresence';
 import { fmtDuration } from './Leaderboard';
 import './social.css';
+import './groups-status.css';
+
+const formatClock = (sec) =>
+  `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+
+/* small live-status chip shown next to each member */
+function MemberStatus({ info }) {
+  if (!info || info.state === 'idle') return <span className="st-status idle">Not studying</span>;
+  const label = info.state === 'focus' ? '🔥 Focusing' : '☕ On break';
+  return (
+    <span className={`st-status ${info.state}`}>
+      {label} · {info.paused ? 'paused' : `${formatClock(info.remaining)} left`}
+    </span>
+  );
+}
 
 function GroupRoom({ group, onLeave }) {
   const { user } = useAuth();
@@ -11,9 +27,35 @@ function GroupRoom({ group, onLeave }) {
   const [minutes, setMinutes] = useState(25);
 
   const loadBoard = useCallback(() => groupLeaderboard(group.id, 'week').then(setRows).catch(() => {}), [group.id]);
-  const { remaining, status, timer, start, pause, resume, stop } = useGroupTimer(group.id, { onSessionSaved: loadBoard });
+
+  // MY OWN timer: only I can start / pause / stop it
+  const mine = useMemberTimer(group.id, { onSessionSaved: loadBoard });
+  // live status of everybody in the group
+  const presence = useGroupPresence(group.id);
 
   useEffect(() => { loadBoard(); }, [loadBoard]);
+
+  // refresh the totals when somebody starts or finishes a focus run
+  const focusingKey = Object.entries(presence)
+    .filter(([, p]) => p.state === 'focus')
+    .map(([id]) => id)
+    .sort()
+    .join(',');
+  useEffect(() => {
+    const id = setTimeout(loadBoard, 1500); // small delay so the saved session is committed
+    return () => clearTimeout(id);
+  }, [focusingKey, loadBoard]);
+
+  // for myself use the local timer so the chip reacts instantly
+  const myInfo =
+    mine.status === 'idle'
+      ? { state: 'idle' }
+      : { state: mine.mode, paused: mine.status === 'paused', remaining: mine.remaining };
+
+  const stateLabel =
+    mine.status === 'idle' ? 'Ready'
+    : mine.status === 'paused' ? 'Paused'
+    : mine.mode === 'focus' ? 'Focus' : 'Break';
 
   return (
     <div className="st-group glass">
@@ -26,34 +68,48 @@ function GroupRoom({ group, onLeave }) {
       </div>
 
       <div className="st-timer">
-        <div className="st-clock">{formatClock(remaining)}</div>
-        <small>{status === 'idle' ? 'Ready' : status === 'finished' ? 'Finished' : `${timer?.mode} · ${status}`}</small>
+        <div className="st-clock">{formatClock(mine.remaining)}</div>
+        <small>{stateLabel}</small>
 
         <div className="st-timer-controls">
-          {(status === 'idle' || status === 'finished') && (
+          {mine.status === 'idle' && (
             <>
               <select value={minutes} onChange={(e) => setMinutes(Number(e.target.value))}>
                 {[15, 25, 35, 45, 60, 90].map((m) => <option key={m} value={m}>{m} min</option>)}
               </select>
-              <button onClick={() => start('focus', minutes)}>Start focus for everyone</button>
-              <button className="ghost" onClick={() => start('short', 5)}>5 min break</button>
+              <button onClick={() => mine.start('focus', minutes)}>Start my focus</button>
+              <button className="ghost" onClick={() => mine.start('break', 5)}>5 min break</button>
             </>
           )}
-          {status === 'running' && <button onClick={pause}>Pause</button>}
-          {status === 'paused' && <button onClick={resume}>Resume</button>}
-          {(status === 'running' || status === 'paused') && <button className="ghost" onClick={stop}>Stop</button>}
+          {mine.status === 'running' && <button onClick={mine.pause}>Pause</button>}
+          {mine.status === 'paused' && <button onClick={mine.resume}>Resume</button>}
+          {mine.status !== 'idle' && (
+            <button
+              className="ghost"
+              onClick={mine.stop}
+              title={mine.mode === 'focus' ? 'Log the time you studied so far (needs at least 1 minute)' : 'Stop the break'}
+            >
+              {mine.mode === 'focus' ? 'Finish' : 'Stop'}
+            </button>
+          )}
         </div>
       </div>
 
       <h4>This week</h4>
       <ol className="st-board compact">
-        {rows.map((r) => (
-          <li key={r.user_id} className={r.is_me ? 'me' : ''}>
-            <span className="st-rank">#{r.rank}</span>
-            <span className="st-who"><strong>{r.display_name}{r.user_id === user.id && ' (you)'}</strong></span>
-            <span className="st-time">{fmtDuration(Number(r.total_sec))}</span>
-          </li>
-        ))}
+        {rows.map((r) => {
+          const isMe = r.user_id === user.id;
+          return (
+            <li key={r.user_id} className={r.is_me ? 'me' : ''}>
+              <span className="st-rank">#{r.rank}</span>
+              <span className="st-who">
+                <strong>{r.display_name}{isMe && ' (you)'}</strong>
+                <MemberStatus info={isMe ? myInfo : presence[r.user_id]} />
+              </span>
+              <span className="st-time">{fmtDuration(Number(r.total_sec))}</span>
+            </li>
+          );
+        })}
       </ol>
     </div>
   );
@@ -76,7 +132,7 @@ export default function Groups() {
       <div className="page-header">
         <div>
           <h1>Study groups</h1>
-          <p>Start a shared timer and focus together.</p>
+          <p>Focus together. Everyone runs their own timer, and you can see who's studying live.</p>
         </div>
       </div>
 

@@ -1,0 +1,29 @@
+/* live status chip next to each group member */
+.st-who {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.st-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.st-status.focus {
+  background: rgba(124, 124, 255, 0.2);
+  color: #aeb0ff;
+}
+
+.st-status.break {
+  background: rgba(80, 200, 140, 0.18);
+  color: #7fe0b0;
+}
