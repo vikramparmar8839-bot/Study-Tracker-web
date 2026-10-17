@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
+import { saveFocusSession } from "./lib/api"; // adjust the path if this file lives elsewhere
 
 /* ------------------------------------------------------------------
    Pomodoro timer for StudyTrack
@@ -188,6 +189,7 @@ export function usePomodoro({ subjects = [], onSessionComplete } = {}) {
 
     if (phase === "focus") {
       onSessionComplete?.({ subject, minutes: settings.focus });
+      saveFocusSession({ subject, seconds: settings.focus * 60 }).catch(console.error); // backend
       updatePetStore((c) => ({ ...c, total: (Number(c.total) || 0) + 1 }));
       const done = round + 1;
       if (done >= settings.rounds) {
@@ -231,6 +233,7 @@ export function usePomodoro({ subjects = [], onSessionComplete } = {}) {
       minutes: Math.max(1, Math.round(elapsed / 60)),
       partial: true,
     });
+    saveFocusSession({ subject, seconds: elapsed }).catch(console.error); // backend
     updatePetStore((c) => ({ ...c, total: (Number(c.total) || 0) + 1 }));
     setRunning(false);
     setRemaining(total);

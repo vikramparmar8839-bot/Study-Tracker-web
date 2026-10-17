@@ -5,6 +5,10 @@ import PomodoroTimer, {
   POMODORO_STORAGE_KEY,
 } from "./PomodoroTimer";
 import "./index.css";
+import { useAuth } from "./context/AuthContext";
+import Leaderboard from "./pages/Leaderboard";
+import Friends from "./pages/Friends";
+import Groups from "./pages/Groups";
 import {
   parseSyllabus,
   extractPdfText as extractSyllabusText,
@@ -48,6 +52,7 @@ function formatStudyTime(minutes) {
 }
 
 function App() {
+  const { profile, signOut, updateProfile } = useAuth();
   const [page, setPage] = useState("dashboard");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -2179,12 +2184,32 @@ function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  async function changeUsername() {
+    const value = window.prompt(
+      "Choose your username (3-20 characters: lowercase letters, numbers, _).\nFriends use it to add you.",
+      profile?.username || ""
+    );
+    if (!value) return;
+    try {
+      await updateProfile({ username: value.trim().toLowerCase().replace(/^@/, "") });
+    } catch (error) {
+      alert(
+        /unique|duplicate/i.test(error.message)
+          ? "That username is already taken."
+          : "Usernames need 3-20 lowercase letters, numbers or _."
+      );
+    }
+  }
+
   const NAV = [
     ["dashboard", "🏠 Dashboard"],
     ["attendance", "📊 Attendance"],
     ["syllabus", "📚 Syllabus"],
     ["timetable", "🗓️ Timetable"],
     ["statistics", "📈 Statistics"],
+    ["leaderboard", "🏆 Leaderboard"],
+    ["friends", "👥 Friends"],
+    ["groups", "🤝 Study Groups"],
     ["settings", "⚙️ Settings"],
   ];
 
@@ -2218,6 +2243,21 @@ function App() {
             </button>
           ))}
         </nav>
+
+        {profile && (
+          <div style={{ display: "grid", gap: "8px", padding: "14px 8px 4px", fontSize: "13px" }}>
+            <div>
+              <strong>{profile.display_name}</strong>
+              <div style={{ opacity: 0.65 }}>@{profile.username}</div>
+            </div>
+            <button type="button" className="secondary-button" onClick={changeUsername}>
+              Change username
+            </button>
+            <button type="button" className="secondary-button" onClick={signOut}>
+              Sign out
+            </button>
+          </div>
+        )}
       </aside>
 
       <main className="main">
@@ -2238,6 +2278,9 @@ function App() {
           {page === "syllabus" && Syllabus()}
           {page === "timetable" && Timetable()}
           {page === "statistics" && Statistics()}
+          {page === "leaderboard" && <Leaderboard />}
+          {page === "friends" && <Friends />}
+          {page === "groups" && <Groups />}
           {page === "settings" && Settings()}
         </div>
       </main>

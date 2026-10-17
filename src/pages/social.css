@@ -1,0 +1,56 @@
+/* Styles for Leaderboard / Friends / Groups. Uses your existing dark glass look;
+   tweak the variables below to match your index.css. */
+.st-page { --st-accent: #7c83ff; --st-border: rgba(128,128,128,.28);
+  color: inherit; display: flex; flex-direction: column; gap: 16px; }
+.st-page h2 { margin: 12px 0 0; font-size: 18px; }
+.st-muted { opacity: .7; margin: 4px 0 0; }
+.st-error { color: #ff8a8a; margin: 0; }
+.st-ok { color: #7ee2a8; margin: 0; }
+
+.glass { background: linear-gradient(135deg, rgba(128,128,128,.16), rgba(128,128,128,.05));
+  border: 1px solid var(--st-border); border-radius: 20px; backdrop-filter: blur(14px); }
+
+.st-page button { background: var(--st-accent); color: #fff; border: 0; border-radius: 12px; padding: 9px 16px;
+  cursor: pointer; font: inherit; }
+.st-page button.ghost { background: transparent; border: 1px solid var(--st-border); color: inherit; }
+.st-page input, .st-page select { background: rgba(128,128,128,.14); border: 1px solid var(--st-border); color: inherit;
+  border-radius: 12px; padding: 9px 12px; font: inherit; min-width: 0; }
+
+.st-tabs { display: inline-flex; gap: 4px; padding: 4px; border-radius: 14px; background: rgba(128,128,128,.14); width: fit-content; }
+.st-tabs button { background: transparent; color: inherit; opacity: .65; }
+.st-tabs button.active { background: rgba(128,128,128,.28); opacity: 1; }
+
+.st-board { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.st-row { display: grid; grid-template-columns: 44px 40px minmax(120px, 1.2fr) 2fr 80px; align-items: center; gap: 12px; padding: 12px 16px; }
+.st-row.me { outline: 1px solid var(--st-accent); }
+.st-rank { font-size: 20px; text-align: center; }
+.st-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--st-accent); display: grid; place-items: center;
+  font-weight: 700; overflow: hidden; }
+.st-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.st-who { display: flex; flex-direction: column; min-width: 0; }
+.st-who small, .st-list small { opacity: .65; }
+.st-bar { height: 8px; border-radius: 6px; background: rgba(128,128,128,.2); overflow: hidden; }
+.st-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--st-accent), #4fd1c5); border-radius: 6px; transition: width .4s; }
+.st-time { text-align: right; font-weight: 600; }
+
+.st-inline { display: flex; gap: 10px; padding: 12px; }
+.st-inline input { flex: 1; }
+.st-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.st-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.st-list li { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; gap: 8px; }
+.st-list li button + button { margin-left: 8px; }
+
+.st-group { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+.st-group-head { display: flex; justify-content: space-between; align-items: flex-start; }
+.st-group h3, .st-group h4 { margin: 0; }
+.st-group code { background: rgba(128,128,128,.25); padding: 2px 8px; border-radius: 8px; letter-spacing: 2px; }
+.st-timer { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 0; }
+.st-clock { font-size: 56px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.st-timer-controls { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.st-board.compact li { display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; padding: 6px 0; align-items: center; }
+.st-board.compact li.me strong { color: var(--st-accent); }
+
+@media (max-width: 720px) {
+  .st-row { grid-template-columns: 36px 36px 1fr 70px; }
+  .st-bar { display: none; }
+}
