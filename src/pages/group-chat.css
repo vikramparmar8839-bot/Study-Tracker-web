@@ -1,0 +1,88 @@
+.st-chat-toggle { margin-top: 16px; }
+
+.st-chat {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.st-chat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 280px;
+  overflow-y: auto;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.st-chat-note {
+  margin: auto;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.st-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 78%;
+  gap: 2px;
+}
+.st-msg.mine {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.st-msg-name {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #aeb0ff;
+  padding-left: 4px;
+}
+
+.st-msg-bubble {
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.09);
+  color: inherit;
+  font-size: 0.92rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.st-msg.mine .st-msg-bubble {
+  background: #6f6ff7;
+  color: #fff;
+}
+
+.st-msg-time {
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.4);
+  padding: 0 4px;
+}
+
+.st-chat-form {
+  display: flex;
+  gap: 8px;
+}
+.st-chat-form input { flex: 1; }
+
+/* unread counter on the chat button */
+.st-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #ff5d7a;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+}

@@ -188,3 +188,20 @@ export const memberStatusTouch = (groupId) =>
 
 export const listMemberStatuses = (groupId) =>
   supabase.from('group_member_status').select('*').eq('group_id', groupId).then(unwrap);
+// Paste at the bottom of src/lib/api.js
+
+/* ---------------- group chat ---------------- */
+
+export const sendGroupMessage = (groupId, body) =>
+  supabase.rpc('chat_send', { p_group: groupId, p_body: body }).then(unwrap);
+
+/** newest 50 messages, returned oldest -> newest */
+export const listGroupMessages = (groupId, limit = 50) =>
+  supabase
+    .from('group_messages')
+    .select('id, group_id, user_id, sender_name, body, created_at')
+    .eq('group_id', groupId)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+    .then(unwrap)
+    .then((rows) => rows.reverse());

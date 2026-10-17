@@ -4,6 +4,8 @@ import { createGroup, joinGroup, listMyGroups, leaveGroup, groupLeaderboard } fr
 import { useMemberTimer } from '../hooks/useMemberTimer';
 import { useGroupPresence } from '../hooks/useGroupPresence';
 import { fmtDuration } from './Leaderboard';
+import GroupChat from './GroupChat';
+import { useGroupChat } from '../hooks/useGroupChat';
 import './social.css';
 import './groups-status.css';
 
@@ -25,6 +27,29 @@ function GroupRoom({ group, onLeave }) {
   const { user } = useAuth();
   const [rows, setRows] = useState([]);
   const [minutes, setMinutes] = useState(25);
+  const [chatOpen, setChatOpen] = useState(false);
+
+  // chat lives here (not inside GroupChat) so new messages are counted while the chat is closed
+  const chat = useGroupChat(group.id);
+  const readKey = `studytrack-chat-read:${group.id}`;
+  const [lastRead, setLastRead] = useState(() => {
+    try { return localStorage.getItem(readKey); } catch { return null; }
+  });
+  const newestAt = chat.messages.length ? chat.messages[chat.messages.length - 1].created_at : null;
+
+  // mark everything as read while the chat is open (and on the very first visit)
+  useEffect(() => {
+    if (chat.loading) return;
+    if (chatOpen || lastRead == null) {
+      const mark = newestAt ?? '1970-01-01T00:00:00.000Z';
+      setLastRead(mark);
+      try { localStorage.setItem(readKey, mark); } catch { /* storage unavailable */ }
+    }
+  }, [chat.loading, chatOpen, newestAt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const unread = lastRead == null ? 0 : chat.messages.filter(
+    (m) => m.user_id !== user.id && Date.parse(m.created_at) > Date.parse(lastRead),
+  ).length;
 
   const loadBoard = useCallback(() => groupLeaderboard(group.id, 'week').then(setRows).catch(() => {}), [group.id]);
 
@@ -111,6 +136,12 @@ function GroupRoom({ group, onLeave }) {
           );
         })}
       </ol>
+
+      <button className="ghost st-chat-toggle" onClick={() => setChatOpen((o) => !o)}>
+        💬 {chatOpen ? 'Hide chat' : 'Group chat'}
+        {!chatOpen && unread > 0 && <span className="st-badge">{unread > 9 ? '9+' : unread}</span>}
+      </button>
+      {chatOpen && <GroupChat chat={chat} />}
     </div>
   );
 }
