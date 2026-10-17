@@ -1,4 +1,9 @@
-.st-chat-toggle { margin-top: 16px; }
+.st-chat-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
 
 .st-chat {
   margin-top: 12px;
@@ -85,4 +90,77 @@
   color: #fff;
   font-size: 0.72rem;
   font-weight: 700;
+}
+
+/* ---------- emoji picker ---------- */
+.st-emoji-wrap { position: relative; }
+
+.st-emoji-btn {
+  padding: 0 12px;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.st-emoji-panel {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 20;
+  width: 272px;
+  padding: 8px;
+  border-radius: 14px;
+  background: rgba(24, 24, 36, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.st-emoji-tabs {
+  display: flex;
+  gap: 4px;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.st-emoji-tab {
+  flex: 1;
+  padding: 4px 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 1.05rem;
+  cursor: pointer;
+  opacity: 0.55;
+}
+.st-emoji-tab.active {
+  background: rgba(255, 255, 255, 0.1);
+  opacity: 1;
+}
+
+.st-emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.st-emoji-item {
+  padding: 4px 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 1.25rem;
+  line-height: 1.2;
+  cursor: pointer;
+}
+.st-emoji-item:hover { background: rgba(255, 255, 255, 0.12); }
+
+/* a message that is only emojis */
+.st-msg-bubble.emoji-only,
+.st-msg.mine .st-msg-bubble.emoji-only {
+  background: transparent;
+  padding: 0 4px;
+  font-size: 2.1rem;
+  line-height: 1.15;
 }
