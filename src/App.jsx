@@ -34,7 +34,19 @@ const DEFAULT_SETTINGS = {
   warningThreshold: 75,
   dailyStudyGoal: 180,
   theme: "dark",
+  accent: "indigo",
 };
+
+// Accent presets. The actual colors live in index.css
+// (:root[data-studytrack-accent="..."]); "swatch" is only for the picker dots.
+const ACCENT_OPTIONS = [
+  { id: "indigo", label: "Indigo", swatch: "#6366f1" },
+  { id: "violet", label: "Violet", swatch: "#8b5cf6" },
+  { id: "rose", label: "Rose", swatch: "#f43f5e" },
+  { id: "emerald", label: "Emerald", swatch: "#10b981" },
+  { id: "orange", label: "Orange", swatch: "#f97316" },
+  { id: "cyan", label: "Cyan", swatch: "#06b6d4" },
+];
 
 function getLocalDateKey(date = new Date()) {
   const year = date.getFullYear();
@@ -171,6 +183,11 @@ function App() {
   useEffect(() => {
     localStorage.setItem("studytrack-settings", JSON.stringify(settings));
     document.documentElement.dataset.studytrackTheme = settings.theme;
+    document.documentElement.dataset.studytrackAccent = ACCENT_OPTIONS.some(
+      (option) => option.id === settings.accent
+    )
+      ? settings.accent
+      : "indigo";
   }, [settings]);
 
   useEffect(() => {
@@ -582,6 +599,60 @@ function App() {
     return streak;
   }, [studySessions]);
 
+  // Heatmap: last 12 weeks (Sun-Sat columns), minutes studied per day
+  const studyHeatmap = useMemo(() => {
+    const WEEKS = 12;
+    const goalMinutes = Math.max(
+      1,
+      Number(settings.dailyStudyGoal) || 180
+    );
+
+    const minutesByDate = {};
+    studySessions.forEach((session) => {
+      minutesByDate[session.date] =
+        (minutesByDate[session.date] || 0) + Number(session.duration || 0);
+    });
+
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+
+    // Sunday of the current week, then go back WEEKS - 1 weeks
+    const start = new Date(today);
+    start.setDate(start.getDate() - start.getDay() - (WEEKS - 1) * 7);
+
+    const days = [];
+    for (let i = 0; i < WEEKS * 7; i++) {
+      const date = new Date(start);
+      date.setDate(start.getDate() + i);
+      const key = getLocalDateKey(date);
+      const minutes = minutesByDate[key] || 0;
+      const isFuture = date > today;
+
+      // Level is relative to the daily goal, so level 4 = goal reached
+      let level = 0;
+      if (minutes > 0) {
+        const ratio = minutes / goalMinutes;
+        level = ratio >= 1 ? 4 : ratio >= 0.5 ? 3 : ratio >= 0.25 ? 2 : 1;
+      }
+
+      days.push({
+        key,
+        minutes,
+        level,
+        isFuture,
+        label: date.toLocaleDateString(undefined, {
+          day: "numeric",
+          month: "short",
+        }),
+      });
+    }
+
+    return {
+      days,
+      activeDays: days.filter((day) => day.minutes > 0).length,
+    };
+  }, [studySessions, settings.dailyStudyGoal]);
+
   const subjectStudyTotals = useMemo(
     () =>
       subjects.map((subject) => ({
@@ -709,13 +780,44 @@ function App() {
               <span className="mini-sub">Last 7 days</span>
             </div>
 
-            <div className="productivity-mini-card streak-card">
-              <span className="mini-label">Current Streak</span>
-              <strong className="mini-value">
-                <span className="streak-fire">🔥</span> {studyStreak}{" "}
-                {studyStreak === 1 ? "day" : "days"}
-              </strong>
-              <span className="mini-sub">Consecutive study days</span>
+            <div className="productivity-mini-card heatmap-card">
+              <div className="heatmap-header">
+                <span className="mini-label">Study Activity</span>
+                <span className="heatmap-streak">
+                  🔥 {studyStreak} {studyStreak === 1 ? "day" : "days"}
+                </span>
+              </div>
+
+              <div className="heatmap-grid" role="img" aria-label="Study activity over the last 12 weeks">
+                {studyHeatmap.days.map((day) => (
+                  <div
+                    key={day.key}
+                    className={`heatmap-cell level-${day.level} ${
+                      day.isFuture ? "future" : ""
+                    }`}
+                    title={
+                      day.isFuture
+                        ? ""
+                        : `${day.label}: ${
+                            day.minutes ? formatStudyTime(day.minutes) : "No study"
+                          }`
+                    }
+                  />
+                ))}
+              </div>
+
+              <div className="heatmap-footer">
+                <span className="mini-sub">
+                  {studyHeatmap.activeDays} active days · last 12 weeks
+                </span>
+                <div className="heatmap-legend">
+                  <span>Less</span>
+                  {[0, 1, 2, 3, 4].map((level) => (
+                    <i key={level} className={`heatmap-cell level-${level}`} />
+                  ))}
+                  <span>More</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1657,7 +1759,7 @@ function App() {
               <div>
                 <h2>🌙 Appearance</h2>
                 <p>
-                  Choose how StudyTrack should remember your preferred theme.
+                  Choose your preferred theme and accent color.
                 </p>
               </div>
             </div>
@@ -1673,8 +1775,37 @@ function App() {
               </select>
             </label>
 
-            <p style={{ marginTop: "10px", fontSize: "13px", opacity: 0.65 }}>
-              The theme updates immediately and is remembered on this device.
+            <div style={{ marginTop: "18px" }}>
+              <span>Accent color</span>
+              <div
+                className="accent-picker"
+                role="radiogroup"
+                aria-label="Accent color"
+              >
+                {ACCENT_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={settings.accent === option.id}
+                    className={`accent-swatch ${
+                      settings.accent === option.id ? "selected" : ""
+                    }`}
+                    onClick={() => updateSetting("accent", option.id)}
+                  >
+                    <span
+                      className="accent-dot"
+                      style={{ "--swatch": option.swatch }}
+                    />
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <p style={{ marginTop: "14px", fontSize: "13px", opacity: 0.65 }}>
+              Theme and accent color update immediately and are remembered on
+              this device.
             </p>
           </div>
 
