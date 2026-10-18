@@ -89,6 +89,7 @@ function App() {
   });
 
   const [showAdd, setShowAdd] = useState(false);
+  const [selectedHeatDay, setSelectedHeatDay] = useState(null);
   const [newName, setNewName] = useState("");
   const [newBenchmark, setNewBenchmark] = useState(75);
   const [selectedSyllabusSubject, setSelectedSyllabusSubject] = useState(null);
@@ -644,6 +645,11 @@ function App() {
           day: "numeric",
           month: "short",
         }),
+        fullLabel: date.toLocaleDateString(undefined, {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+        }),
       });
     }
 
@@ -652,6 +658,31 @@ function App() {
       activeDays: days.filter((day) => day.minutes > 0).length,
     };
   }, [studySessions, settings.dailyStudyGoal]);
+
+  // Details for the day clicked in the heatmap
+  const selectedHeatInfo = useMemo(() => {
+    if (!selectedHeatDay) return null;
+    const day = studyHeatmap.days.find((item) => item.key === selectedHeatDay);
+    if (!day || day.isFuture) return null;
+
+    const sessions = studySessions.filter(
+      (session) => session.date === selectedHeatDay
+    );
+    const bySubject = {};
+    sessions.forEach((session) => {
+      const name = session.subject || "General Study";
+      bySubject[name] = (bySubject[name] || 0) + Number(session.duration || 0);
+    });
+
+    return {
+      label: day.fullLabel,
+      total: day.minutes,
+      count: sessions.length,
+      subjects: Object.entries(bySubject)
+        .map(([name, minutes]) => ({ name, minutes }))
+        .sort((x, y) => y.minutes - x.minutes),
+    };
+  }, [selectedHeatDay, studyHeatmap, studySessions]);
 
   const subjectStudyTotals = useMemo(
     () =>
@@ -788,12 +819,23 @@ function App() {
                 </span>
               </div>
 
-              <div className="heatmap-grid" role="img" aria-label="Study activity over the last 12 weeks">
+              <div
+                className="heatmap-grid"
+                role="group"
+                aria-label="Study activity over the last 12 weeks. Select a day for details."
+              >
                 {studyHeatmap.days.map((day) => (
-                  <div
+                  <button
+                    type="button"
                     key={day.key}
                     className={`heatmap-cell level-${day.level} ${
                       day.isFuture ? "future" : ""
+                    } ${selectedHeatDay === day.key ? "selected" : ""}`}
+                    disabled={day.isFuture}
+                    tabIndex={day.isFuture ? -1 : 0}
+                    aria-pressed={selectedHeatDay === day.key}
+                    aria-label={`${day.fullLabel}: ${
+                      day.minutes ? formatStudyTime(day.minutes) : "no study"
                     }`}
                     title={
                       day.isFuture
@@ -802,9 +844,52 @@ function App() {
                             day.minutes ? formatStudyTime(day.minutes) : "No study"
                           }`
                     }
+                    onClick={() =>
+                      setSelectedHeatDay((current) =>
+                        current === day.key ? null : day.key
+                      )
+                    }
                   />
                 ))}
               </div>
+
+              {selectedHeatInfo && (
+                <div className="heatmap-day">
+                  <div className="heatmap-day-header">
+                    <div>
+                      <strong>{selectedHeatInfo.label}</strong>
+                      <span>
+                        {selectedHeatInfo.total
+                          ? `${formatStudyTime(selectedHeatInfo.total)} · ${
+                              selectedHeatInfo.count
+                            } ${
+                              selectedHeatInfo.count === 1 ? "session" : "sessions"
+                            }`
+                          : "No study logged"}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="heatmap-day-close"
+                      aria-label="Close day details"
+                      onClick={() => setSelectedHeatDay(null)}
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  {selectedHeatInfo.subjects.length > 0 && (
+                    <ul className="heatmap-day-list">
+                      {selectedHeatInfo.subjects.map((item) => (
+                        <li key={item.name}>
+                          <span>{item.name}</span>
+                          <strong>{formatStudyTime(item.minutes)}</strong>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
 
               <div className="heatmap-footer">
                 <span className="mini-sub">
