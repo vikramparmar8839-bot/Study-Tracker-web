@@ -1679,16 +1679,16 @@ body {
   font-size: 27px;
 }
 
-/* ---------- Study heatmap ---------- */
+/* ---------- Weekly study chart ---------- */
 
-.heatmap-header {
+.weekchart-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
 }
 
-.heatmap-streak {
+.weekchart-streak {
   padding: 3px 10px;
   border-radius: 999px;
   background: var(--amber-soft);
@@ -1697,120 +1697,99 @@ body {
   font-weight: 700;
 }
 
-.heatmap-grid {
+.weekchart {
+  position: relative;
   display: grid;
-  grid-template-columns: repeat(12, 1fr);
-  grid-template-rows: repeat(7, auto);
-  grid-auto-flow: column;
-  gap: 4px;
-  margin-top: 14px;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  margin-top: 16px;
+  --chart-h: 104px;
 }
 
-.heatmap-cell {
-  display: block;
-  aspect-ratio: 1;
-  border-radius: 4px;
-  background: var(--surface-3);
-  transition: transform .12s ease;
+.weekchart-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
-.heatmap-grid .heatmap-cell:hover { transform: scale(1.25); }
-
-.heatmap-cell.level-1 { background: color-mix(in srgb, var(--accent) 30%, var(--surface-3)); }
-.heatmap-cell.level-2 { background: color-mix(in srgb, var(--accent) 55%, var(--surface-3)); }
-.heatmap-cell.level-3 { background: color-mix(in srgb, var(--accent) 80%, var(--surface-3)); }
-.heatmap-cell.level-4 { background: var(--accent); box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 55%, transparent); }
-.heatmap-cell.future { visibility: hidden; }
-
-button.heatmap-cell {
+.weekchart-track {
+  display: flex;
+  align-items: flex-end;
   width: 100%;
-  padding: 0;
-  border: 0;
-  cursor: pointer;
+  height: var(--chart-h);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-3) 70%, transparent);
+  overflow: hidden;
 }
 
-button.heatmap-cell:disabled { cursor: default; }
+.weekchart-bar {
+  width: 100%;
+  min-height: 0;
+  border-radius: 8px;
+  background: var(--surface-3);
+  transition: height .35s ease;
+}
 
-.heatmap-cell.selected {
-  outline: 2px solid var(--text);
+.weekchart-bar.level-1 { background: color-mix(in srgb, var(--accent) 35%, var(--surface-3)); }
+.weekchart-bar.level-2 { background: color-mix(in srgb, var(--accent) 55%, var(--surface-3)); }
+.weekchart-bar.level-3 { background: color-mix(in srgb, var(--accent) 80%, var(--surface-3)); }
+.weekchart-bar.level-4 { background: var(--accent); }
+
+.weekchart-day {
+  color: var(--faint);
+  font-size: 11.5px;
+  line-height: 1;
+}
+
+.weekchart-col.today .weekchart-day {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.weekchart-col.today .weekchart-track {
+  outline: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   outline-offset: 1px;
 }
 
-button.heatmap-cell:focus-visible {
-  outline: 2px solid var(--accent-text);
-  outline-offset: 2px;
+.weekchart-col.future { opacity: .45; }
+
+/* dashed line marking the daily goal across the bars */
+.weekchart-goal {
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px dashed color-mix(in srgb, var(--text) 35%, transparent);
+  pointer-events: none;
 }
 
-.heatmap-day {
-  margin-top: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface-2);
-}
-
-.heatmap-day-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.heatmap-day-header strong { display: block; font-size: 14px; }
-.heatmap-day-header span { display: block; margin-top: 2px; color: var(--muted); font-size: 12.5px; }
-
-.heatmap-day-close {
-  width: 28px;
-  height: 28px;
-  flex: none;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 20px;
-  line-height: 1;
-  cursor: pointer;
-}
-.heatmap-day-close:hover { background: var(--accent-soft); color: var(--text); }
-
-.heatmap-day-list {
-  display: grid;
-  gap: 6px;
-  margin: 10px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.heatmap-day-list li {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 13px;
-  color: var(--muted);
-}
-.heatmap-day-list li strong { color: var(--text); font-weight: 600; }
-
-.heatmap-footer {
+.weekchart-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 4px;
 }
 
-.heatmap-footer .mini-sub { margin-top: 0; }
+.weekchart-footer .mini-sub { margin-top: 0; }
 
-.heatmap-legend {
+.weekchart-key {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 6px;
   color: var(--faint);
   font-size: 11px;
 }
 
-.heatmap-legend span { margin: 0 3px; }
-.heatmap-legend .heatmap-cell { width: 11px; height: 11px; aspect-ratio: auto; border-radius: 3px; }
+.weekchart-key i {
+  display: block;
+  width: 14px;
+  border-top: 1px dashed color-mix(in srgb, var(--text) 45%, transparent);
+}
 
 /* ---------- Study history ---------- */
 

@@ -89,7 +89,6 @@ function App() {
   });
 
   const [showAdd, setShowAdd] = useState(false);
-  const [selectedHeatDay, setSelectedHeatDay] = useState(null);
   const [newName, setNewName] = useState("");
   const [newBenchmark, setNewBenchmark] = useState(75);
   const [selectedSyllabusSubject, setSelectedSyllabusSubject] = useState(null);
@@ -600,9 +599,8 @@ function App() {
     return streak;
   }, [studySessions]);
 
-  // Heatmap: last 12 weeks (Sun-Sat columns), minutes studied per day
-  const studyHeatmap = useMemo(() => {
-    const WEEKS = 12;
+// Weekly chart: Monday-Sunday of the current week, minutes studied per day
+  const weeklyChart = useMemo(() => {
     const goalMinutes = Math.max(
       1,
       Number(settings.dailyStudyGoal) || 180
@@ -616,18 +614,18 @@ function App() {
 
     const today = new Date();
     today.setHours(12, 0, 0, 0);
+    const todayKey = getLocalDateKey(today);
 
-    // Sunday of the current week, then go back WEEKS - 1 weeks
-    const start = new Date(today);
-    start.setDate(start.getDate() - start.getDay() - (WEEKS - 1) * 7);
+    // Monday of the current week
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
 
     const days = [];
-    for (let i = 0; i < WEEKS * 7; i++) {
-      const date = new Date(start);
-      date.setDate(start.getDate() + i);
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(monday);
+      date.setDate(monday.getDate() + i);
       const key = getLocalDateKey(date);
       const minutes = minutesByDate[key] || 0;
-      const isFuture = date > today;
 
       // Level is relative to the daily goal, so level 4 = goal reached
       let level = 0;
@@ -640,11 +638,9 @@ function App() {
         key,
         minutes,
         level,
-        isFuture,
-        label: date.toLocaleDateString(undefined, {
-          day: "numeric",
-          month: "short",
-        }),
+        isToday: key === todayKey,
+        isFuture: date > today,
+        label: date.toLocaleDateString(undefined, { weekday: "short" }),
         fullLabel: date.toLocaleDateString(undefined, {
           weekday: "long",
           day: "numeric",
@@ -653,36 +649,19 @@ function App() {
       });
     }
 
+    // Scale bars to the goal (or the best day, if higher) so they stay readable
+    const scaleMax = Math.max(goalMinutes, ...days.map((day) => day.minutes));
+
     return {
-      days,
+      days: days.map((day) => ({
+        ...day,
+        height: day.minutes ? Math.max(6, (day.minutes / scaleMax) * 100) : 0,
+      })),
+      goalLine: (goalMinutes / scaleMax) * 100,
       activeDays: days.filter((day) => day.minutes > 0).length,
     };
   }, [studySessions, settings.dailyStudyGoal]);
 
-  // Details for the day clicked in the heatmap
-  const selectedHeatInfo = useMemo(() => {
-    if (!selectedHeatDay) return null;
-    const day = studyHeatmap.days.find((item) => item.key === selectedHeatDay);
-    if (!day || day.isFuture) return null;
-
-    const sessions = studySessions.filter(
-      (session) => session.date === selectedHeatDay
-    );
-    const bySubject = {};
-    sessions.forEach((session) => {
-      const name = session.subject || "General Study";
-      bySubject[name] = (bySubject[name] || 0) + Number(session.duration || 0);
-    });
-
-    return {
-      label: day.fullLabel,
-      total: day.minutes,
-      count: sessions.length,
-      subjects: Object.entries(bySubject)
-        .map(([name, minutes]) => ({ name, minutes }))
-        .sort((x, y) => y.minutes - x.minutes),
-    };
-  }, [selectedHeatDay, studyHeatmap, studySessions]);
 
   const subjectStudyTotals = useMemo(
     () =>
@@ -811,97 +790,64 @@ function App() {
               <span className="mini-sub">Last 7 days</span>
             </div>
 
-            <div className="productivity-mini-card heatmap-card">
-              <div className="heatmap-header">
+            <div className="productivity-mini-card weekchart-card">
+              <div className="weekchart-header">
                 <span className="mini-label">Study Activity</span>
-                <span className="heatmap-streak">
+                <span className="weekchart-streak">
                   🔥 {studyStreak} {studyStreak === 1 ? "day" : "days"}
                 </span>
               </div>
 
               <div
-                className="heatmap-grid"
-                role="group"
-                aria-label="Study activity over the last 12 weeks. Select a day for details."
+                className="weekchart"
+                role="img"
+                aria-label={`Study time this week: ${weeklyChart.days
+                  .map(
+                    (day) =>
+                      `${day.label} ${
+                        day.minutes ? formatStudyTime(day.minutes) : "none"
+                      }`
+                  )
+                  .join(", ")}`}
               >
-                {studyHeatmap.days.map((day) => (
-                  <button
-                    type="button"
+                <div
+                  className="weekchart-goal"
+                  style={{
+                    top: `calc(var(--chart-h) * ${
+                      (100 - weeklyChart.goalLine) / 100
+                    })`,
+                  }}
+                  aria-hidden="true"
+                />
+                {weeklyChart.days.map((day) => (
+                  <div
                     key={day.key}
-                    className={`heatmap-cell level-${day.level} ${
+                    className={`weekchart-col ${day.isToday ? "today" : ""} ${
                       day.isFuture ? "future" : ""
-                    } ${selectedHeatDay === day.key ? "selected" : ""}`}
-                    disabled={day.isFuture}
-                    tabIndex={day.isFuture ? -1 : 0}
-                    aria-pressed={selectedHeatDay === day.key}
-                    aria-label={`${day.fullLabel}: ${
-                      day.minutes ? formatStudyTime(day.minutes) : "no study"
                     }`}
-                    title={
-                      day.isFuture
-                        ? ""
-                        : `${day.label}: ${
-                            day.minutes ? formatStudyTime(day.minutes) : "No study"
-                          }`
-                    }
-                    onClick={() =>
-                      setSelectedHeatDay((current) =>
-                        current === day.key ? null : day.key
-                      )
-                    }
-                  />
+                    title={`${day.fullLabel}: ${
+                      day.minutes ? formatStudyTime(day.minutes) : "No study"
+                    }`}
+                  >
+                    <div className="weekchart-track">
+                      <div
+                        className={`weekchart-bar level-${day.level}`}
+                        style={{ height: `${day.height}%` }}
+                      />
+                    </div>
+                    <span className="weekchart-day">{day.label}</span>
+                  </div>
                 ))}
               </div>
 
-              {selectedHeatInfo && (
-                <div className="heatmap-day">
-                  <div className="heatmap-day-header">
-                    <div>
-                      <strong>{selectedHeatInfo.label}</strong>
-                      <span>
-                        {selectedHeatInfo.total
-                          ? `${formatStudyTime(selectedHeatInfo.total)} · ${
-                              selectedHeatInfo.count
-                            } ${
-                              selectedHeatInfo.count === 1 ? "session" : "sessions"
-                            }`
-                          : "No study logged"}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      className="heatmap-day-close"
-                      aria-label="Close day details"
-                      onClick={() => setSelectedHeatDay(null)}
-                    >
-                      ×
-                    </button>
-                  </div>
-
-                  {selectedHeatInfo.subjects.length > 0 && (
-                    <ul className="heatmap-day-list">
-                      {selectedHeatInfo.subjects.map((item) => (
-                        <li key={item.name}>
-                          <span>{item.name}</span>
-                          <strong>{formatStudyTime(item.minutes)}</strong>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-
-              <div className="heatmap-footer">
+              <div className="weekchart-footer">
                 <span className="mini-sub">
-                  {studyHeatmap.activeDays} active days · last 12 weeks
+                  {weeklyChart.activeDays} active{" "}
+                  {weeklyChart.activeDays === 1 ? "day" : "days"} this week
                 </span>
-                <div className="heatmap-legend">
-                  <span>Less</span>
-                  {[0, 1, 2, 3, 4].map((level) => (
-                    <i key={level} className={`heatmap-cell level-${level}`} />
-                  ))}
-                  <span>More</span>
-                </div>
+                <span className="weekchart-key">
+                  <i aria-hidden="true" /> Daily goal
+                </span>
               </div>
             </div>
           </div>
