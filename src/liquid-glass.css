@@ -845,3 +845,102 @@ select:open {
   content: none !important;
   display: none !important;
 }
+
+/* =========================================================
+   PERFORMANCE LAYER
+   Keeps the same glass look, but removes the things that make
+   scrolling and animations heavy. Everything here is an override,
+   so the rules above are left untouched.
+
+   What it fixes:
+   1. backdrop-filter was on every card, row, button, input, select and
+      pill, often nested inside other blurred cards. Each one is a GPU
+      layer that re-blurs on every frame, and the focus card re-blurred
+      constantly because of the timer and the animated cat. On desktop
+      nothing scrolls under the cards (only the fixed gradient is behind
+      them), so the blur was costing a lot for almost no visible effect.
+      Real blur is kept only where content really passes behind:
+      the pet bubble, the mobile menu button, the mobile sidebar and the
+      open dropdown list.
+   2. background-attachment: fixed made the browser repaint the four big
+      gradients on every scroll. They now live on one fixed, GPU-promoted
+      layer that is painted once.
+   3. Softer, smaller drop shadows (less to repaint on hover).
+   ========================================================= */
+
+/* ---------- 1. Backdrop gradients on their own fixed layer ---------- */
+html { background: var(--bg); }
+
+:root:root:root body {
+  background: transparent;
+  background-image: none;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  contain: strict;
+  transform: translateZ(0);
+}
+
+:root:not([data-studytrack-theme="light"]) body::before {
+  background-image:
+    radial-gradient(42rem 36rem at 10% 6%,  rgba(99,102,241,.70), transparent 70%),
+    radial-gradient(36rem 32rem at 90% 10%, rgba(34,211,238,.45), transparent 70%),
+    radial-gradient(42rem 36rem at 80% 94%, rgba(236,72,153,.42), transparent 70%),
+    radial-gradient(36rem 32rem at 6% 90%,  rgba(52,211,153,.34), transparent 70%);
+}
+
+:root[data-studytrack-theme="light"] body::before {
+  background-image:
+    radial-gradient(42rem 36rem at 10% 6%,  rgba(129,140,248,.95), transparent 70%),
+    radial-gradient(36rem 32rem at 90% 10%, rgba(34,211,238,.75),  transparent 70%),
+    radial-gradient(42rem 36rem at 80% 94%, rgba(244,114,182,.70), transparent 70%),
+    radial-gradient(36rem 32rem at 6% 90%,  rgba(52,211,153,.65),  transparent 70%);
+}
+
+/* ---------- 2. No backdrop-filter by default ---------- */
+:root:root:root:root:root * {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* ...except the few places where page content really moves behind glass */
+:root:root:root:root:root .cat-bubble,
+:root:root:root:root:root .mobile-menu-button {
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  backdrop-filter: blur(12px) saturate(150%);
+}
+
+/* Mobile: the sidebar slides over the page, so it keeps a (lighter) blur */
+@media (max-width: 650px) {
+  :root:root:root:root:root .sidebar {
+    -webkit-backdrop-filter: blur(16px) saturate(150%);
+    backdrop-filter: blur(16px) saturate(150%);
+  }
+}
+
+/* Full-screen blur on the menu overlay is very expensive: darken instead */
+.sidebar-overlay { background: rgba(10, 12, 24, .5); }
+
+/* Dropdown list: only exists while open, so a smaller blur is enough */
+@supports (appearance: base-select) {
+  ::picker(select) {
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+    backdrop-filter: blur(18px) saturate(160%);
+  }
+}
+
+/* ---------- 3. Lighter shadows ---------- */
+:root:root:not([data-studytrack-theme="light"]) {
+  --lg-shadow: 0 1px 2px rgba(0,0,0,.18), 0 10px 26px rgba(0,0,0,.26);
+  --lg-shadow-hover: 0 14px 32px rgba(0,0,0,.32);
+}
+
+:root:root[data-studytrack-theme="light"] {
+  --lg-shadow: 0 0 0 1px rgba(40,52,110,.06), 0 2px 4px rgba(40,52,110,.05), 0 10px 26px rgba(60,72,150,.15);
+  --lg-shadow-hover: 0 0 0 1px rgba(79,70,229,.14), 0 14px 32px rgba(79,70,229,.20);
+}
