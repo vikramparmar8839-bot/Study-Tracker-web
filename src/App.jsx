@@ -5,6 +5,7 @@ import PomodoroTimer, {
   POMODORO_STORAGE_KEY,
 } from "./PomodoroTimer";
 import "./index.css";
+import liquidGlassCss from "./liquid-glass.css?inline";
 import { useAuth } from "./context/AuthContext";
 import Leaderboard from "./pages/Leaderboard";
 import Friends from "./pages/Friends";
@@ -28,6 +29,35 @@ const DEFAULT_SUBJECTS = [
   { id: 3, name: "C++ Programming", present: 17, absent: 8, benchmark: 50 },
 ];
 
+// Liquid glass theme: liquid-glass.css is loaded as text and added to / removed
+// from <head> on demand. It goes first in <head> so it keeps the same low
+// priority it had when index.css imported it.
+const GLASS_STYLE_ID = "studytrack-liquid-glass";
+
+function applyLiquidGlass(enabled) {
+  document.documentElement.dataset.studytrackGlass = enabled ? "on" : "off";
+  const existing = document.getElementById(GLASS_STYLE_ID);
+
+  if (enabled && !existing) {
+    const style = document.createElement("style");
+    style.id = GLASS_STYLE_ID;
+    style.textContent = liquidGlassCss;
+    document.head.prepend(style);
+  } else if (!enabled && existing) {
+    existing.remove();
+  }
+}
+
+// Apply the saved choice right away so the page doesn't flash without glass
+try {
+  const savedSettings = JSON.parse(
+    localStorage.getItem("studytrack-settings") || "{}"
+  );
+  applyLiquidGlass(savedSettings.liquidGlass !== false);
+} catch {
+  applyLiquidGlass(true);
+}
+
 const DEFAULT_SETTINGS = {
   studentName: "",
   defaultBenchmark: 75,
@@ -35,6 +65,7 @@ const DEFAULT_SETTINGS = {
   dailyStudyGoal: 180,
   theme: "dark",
   accent: "indigo",
+  liquidGlass: true,
 };
 
 // Accent presets. The actual colors live in index.css
@@ -183,6 +214,7 @@ function App() {
   useEffect(() => {
     localStorage.setItem("studytrack-settings", JSON.stringify(settings));
     document.documentElement.dataset.studytrackTheme = settings.theme;
+    applyLiquidGlass(settings.liquidGlass !== false);
     document.documentElement.dataset.studytrackAccent = ACCENT_OPTIONS.some(
       (option) => option.id === settings.accent
     )
@@ -1806,6 +1838,30 @@ function App() {
               </select>
             </label>
 
+            <div className="glass-toggle-row">
+              <div className="glass-toggle-text">
+                <strong>Liquid glass</strong>
+                <span>Frosted, translucent cards and blur effects.</span>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={settings.liquidGlass !== false}
+                aria-label="Liquid glass theme"
+                className={`glass-switch ${
+                  settings.liquidGlass !== false ? "on" : ""
+                }`}
+                onClick={() =>
+                  updateSetting("liquidGlass", settings.liquidGlass === false)
+                }
+              >
+                <span className="glass-switch-knob" />
+                <span className="glass-switch-label">
+                  {settings.liquidGlass !== false ? "On" : "Off"}
+                </span>
+              </button>
+            </div>
+
             <div style={{ marginTop: "18px" }}>
               <span>Accent color</span>
               <div
@@ -1835,8 +1891,8 @@ function App() {
             </div>
 
             <p style={{ marginTop: "14px", fontSize: "13px", opacity: 0.65 }}>
-              Theme and accent color update immediately and are remembered on
-              this device.
+              Theme, glass effect and accent color update immediately and are
+              remembered on this device.
             </p>
           </div>
 

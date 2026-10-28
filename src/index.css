@@ -1,7 +1,5 @@
 @import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
 
-@import "./liquid-glass.css";
-
 /* =========================================================
    ATTENDANCE TRACKER — single consolidated stylesheet
    Sections: tokens · base · layout · dashboard · attendance
@@ -2706,4 +2704,89 @@ body {
 
 .accent-swatch.selected .accent-dot {
   box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--swatch);
+}
+
+/* ---------- Liquid glass switch (Settings > Appearance) ---------- */
+
+.glass-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+
+.glass-toggle-text strong {
+  display: block;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.glass-toggle-text span {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.glass-switch {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  width: 74px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+  transition: background .2s ease, border-color .2s ease;
+}
+
+.glass-switch-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--text);
+  transition: transform .2s ease, background .2s ease;
+}
+
+.glass-switch-label {
+  width: 100%;
+  padding-left: 34px;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  transition: padding .2s ease;
+}
+
+.glass-switch.on {
+  background: color-mix(in srgb, var(--accent) 45%, var(--surface-3));
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.glass-switch.on .glass-switch-knob {
+  transform: translateX(40px);
+  background: var(--accent);
+}
+
+.glass-switch.on .glass-switch-label {
+  padding-left: 0;
+  padding-right: 34px;
+}
+
+.glass-switch:focus-visible {
+  outline: 2px solid var(--accent-text, var(--accent));
+  outline-offset: 2px;
 }
