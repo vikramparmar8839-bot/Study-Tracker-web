@@ -2790,3 +2790,58 @@ body {
   outline: 2px solid var(--accent-text, var(--accent));
   outline-offset: 2px;
 }
+/* =========================================================
+   MOBILE APP FEEL — paste at the VERY END of index.css
+   Everything is inside the 650px query, so desktop is untouched.
+   ========================================================= */
+@media (max-width: 650px) {
+
+  /* 1. THE LEFT GAP.
+     Line ~830 reserves space next to the sidebar with specificity (0,3,0):
+       .sidebar + *:not(.sidebar-overlay):not(.mobile-menu-button) { margin-left: 250px }
+     The mobile rules `.sidebar + * { margin-left: 0 }` (0,1,0) lose to it.
+     This selector matches it exactly, and comes later, so it wins. */
+  .sidebar + *:not(.sidebar-overlay):not(.mobile-menu-button),
+  .main,
+  main {
+    margin-left: 0 !important;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  /* 2. No sideways scrolling, app-like scrolling behaviour */
+  html, body { overflow-x: hidden; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* 3. Stat cards: 2 per row (the old 400px rule forced 1 per row) */
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .stat-card { padding: 14px; }
+  .stat-card span { font-size: 13px; }
+  .stat-card strong { font-size: 22px; }
+
+  /* 4. Mochi the cat: leave room above the Focus card so it doesn't sit
+        on top of the card above, and keep the speech bubble on screen */
+  .focus-card.pomo { margin-top: 48px; }
+  .cat-track { left: 44px; right: 44px; }
+  .cat-bubble { max-width: 130px; }
+
+  /* 5. Comfortable touch targets, no iOS zoom on inputs */
+  .sidebar nav button,
+  .sidebar nav a,
+  .nav-item,
+  .pomo-tab,
+  .focus-controls button { min-height: 44px; }
+  input, select, textarea { font-size: 16px; }
+
+  /* 6. Keep the hamburger clear of the notch / status bar */
+  .mobile-menu-button { top: calc(12px + env(safe-area-inset-top)); }
+}
