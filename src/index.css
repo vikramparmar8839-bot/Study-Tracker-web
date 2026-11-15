@@ -2810,7 +2810,9 @@ body {
   }
 
   /* 2. No sideways scrolling, app-like scrolling behaviour */
-  html, body { overflow-x: hidden; }
+  /* `clip` hides sideways overflow WITHOUT making body a scroll container
+     (overflow-x: hidden on html + body is what froze vertical scrolling) */
+  html, body { overflow-x: clip; overflow-y: visible; height: auto; }
   html { -webkit-text-size-adjust: 100%; }
   body {
     overscroll-behavior-y: none;
