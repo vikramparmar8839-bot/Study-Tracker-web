@@ -50,16 +50,49 @@ const PET_DEFAULTS = {
   outfits: true,
   name: "Mochi",
   coat: "persian",
-  total: 0, // focus sessions finished together (unlocks outfits)
+  total: 0, // focus sessions finished together
+  seconds: 0, // total focus time studied together (unlocks rewards)
+  head: "auto", // which unlocked hat to wear: "auto" | "none" | a hat key
+  streak: 0, // consecutive days studied
+  bestStreak: 0,
+  lastDay: "", // last day a focus session was finished (YYYY-MM-DD)
+  nudge: null, // { text, id } — lets Settings make the cat say something
 };
 
 function loadPet() {
   try {
-    return { ...PET_DEFAULTS, ...JSON.parse(localStorage.getItem(PET_STORAGE_KEY)) };
+    const stored = JSON.parse(localStorage.getItem(PET_STORAGE_KEY)) || {};
+    const pet = { ...PET_DEFAULTS, ...stored };
+    /* older saves only counted sessions: assume ~25 min each so nobody loses progress */
+    if (stored.seconds == null) pet.seconds = (Number(stored.total) || 0) * 25 * 60;
+    return pet;
   } catch {
     return { ...PET_DEFAULTS };
   }
 }
+
+const dayKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+/* add a finished (or partly finished) focus session to the pet's progress */
+function addStudy(c, secs) {
+  const today = dayKey();
+  const yest = new Date();
+  yest.setDate(yest.getDate() - 1);
+  let streak = Number(c.streak) || 0;
+  if (c.lastDay !== today) streak = c.lastDay === dayKey(yest) ? streak + 1 : 1;
+  return {
+    ...c,
+    total: (Number(c.total) || 0) + 1,
+    seconds: (Number(c.seconds) || 0) + secs,
+    streak,
+    bestStreak: Math.max(Number(c.bestStreak) || 0, streak),
+    lastDay: today,
+  };
+}
+
+/* hours of focus time the cat has studied with you */
+const petHours = (pet) => (Number(pet.seconds) || 0) / 3600;
+const fmtHours = (h) => `${h < 10 ? h.toFixed(1).replace(/\.0$/, "") : Math.floor(h)}h`;
 
 /* patch = object, or (current) => next */
 function updatePetStore(patch) {
@@ -190,7 +223,7 @@ export function usePomodoro({ subjects = [], onSessionComplete } = {}) {
     if (phase === "focus") {
       onSessionComplete?.({ subject, minutes: settings.focus });
       saveFocusSession({ subject, seconds: settings.focus * 60 }).catch(console.error); // backend
-      updatePetStore((c) => ({ ...c, total: (Number(c.total) || 0) + 1 }));
+      updatePetStore((c) => addStudy(c, settings.focus * 60));
       const done = round + 1;
       if (done >= settings.rounds) {
         setRound(0);
@@ -234,7 +267,7 @@ export function usePomodoro({ subjects = [], onSessionComplete } = {}) {
       partial: true,
     });
     saveFocusSession({ subject, seconds: elapsed }).catch(console.error); // backend
-    updatePetStore((c) => ({ ...c, total: (Number(c.total) || 0) + 1 }));
+    updatePetStore((c) => addStudy(c, elapsed));
     setRunning(false);
     setRemaining(total);
   }
@@ -325,12 +358,59 @@ function NumberField({ label, value, range, suffix, disabled, onChange }) {
    outfits you unlock, and celebrates when a session is finished.
 ================================================================ */
 
-/* outfits unlock by total focus sessions finished together */
-const OUTFITS = [
-  { key: "bow", label: "bow tie", emoji: "🎀", at: 3 },
-  { key: "glasses", label: "glasses", emoji: "🕶️", at: 10 },
-  { key: "crown", label: "crown", emoji: "👑", at: 25 },
+/* every reward unlocks by total hours of focus time studied together (`at` = hours).
+   kind: outfit | coat | behavior | extra | title */
+const REWARDS = [
+  { key: "bow", kind: "outfit", label: "bow tie", emoji: "🎀", at: 1 },
+  { key: "t_kitten", kind: "title", label: "Curious Kitten", emoji: "🐱", at: 1 },
+  { key: "glasses", kind: "outfit", label: "glasses", emoji: "🕶️", at: 5 },
+  { key: "t_napper", kind: "title", label: "Cozy Napper", emoji: "😴", at: 5 },
+  { key: "toy", kind: "behavior", label: "toy mouse to chase on breaks", emoji: "🐭", at: 8 },
+  { key: "scarf", kind: "outfit", label: "cozy scarf", emoji: "🧣", at: 10 },
+  { key: "t_tabby", kind: "title", label: "Focused Tabby", emoji: "🐯", at: 10 },
+  { key: "c_black", kind: "coat", coat: "black", label: "Black coat", emoji: "🖤", at: 12 },
+  { key: "c_calico", kind: "coat", coat: "calico", label: "Calico coat", emoji: "🧡", at: 15 },
+  { key: "crown", kind: "outfit", head: true, label: "crown", emoji: "👑", at: 20 },
+  { key: "t_study", kind: "title", label: "Study Cat", emoji: "📚", at: 25 },
+  { key: "desk", kind: "extra", label: "cozy desk & plant scene", emoji: "🪴", at: 30 },
+  { key: "gradcap", kind: "outfit", head: true, label: "graduation cap", emoji: "🎓", at: 35 },
+  { key: "c_tiger", kind: "coat", coat: "tiger", label: "Tiger coat", emoji: "🐅", at: 40 },
+  { key: "wizard", kind: "outfit", head: true, label: "wizard hat & wand", emoji: "🧙", at: 50 },
+  { key: "t_wise", kind: "title", label: "Wise Whiskers", emoji: "🦉", at: 50 },
+  { key: "book", kind: "behavior", label: "naps on a book during breaks", emoji: "📖", at: 60 },
+  { key: "cape", kind: "outfit", label: "hero cape", emoji: "🦸", at: 75 },
+  { key: "halo", kind: "outfit", head: true, label: "golden halo", emoji: "😇", at: 100 },
+  { key: "t_lion", kind: "title", label: "Legendary Lion", emoji: "🦁", at: 100 },
+  { key: "c_galaxy", kind: "coat", coat: "galaxy", label: "Galaxy coat", emoji: "🌌", at: 120 },
+  { key: "aura", kind: "extra", label: "glowing aura", emoji: "✨", at: 150 },
+  { key: "companion", kind: "extra", label: "kitten companion", emoji: "🐈", at: 200 },
 ];
+const KIND_WORD = { outfit: "outfit", coat: "coat", behavior: "trick", extra: "extra", title: "title" };
+const STREAK_BADGE = { label: "Paw-fect Week", emoji: "🔥", days: 7 };
+
+const coatAt = (key) => REWARDS.find((r) => r.coat === key)?.at ?? 0;
+const titleFor = (h) => [...REWARDS].filter((r) => r.kind === "title" && h >= r.at).pop() || null;
+const fmtLeft = (h) => (h < 1 ? `${Math.max(1, Math.ceil(h * 60))} min` : fmtHours(h));
+
+/* the next unlock(s): everything that unlocks at the nearest upcoming hour mark */
+function nextGoal(h) {
+  const next = REWARDS.filter((r) => r.at > h);
+  if (!next.length) return null;
+  const at = Math.min(...next.map((r) => r.at));
+  return { at, items: next.filter((r) => r.at === at) };
+}
+const goalNames = (g) => g.items.map((r) => `${r.emoji} ${r.label}`).join(" + ");
+/* full line: "Next goal: 🎓 graduation cap — study 3.5h more (unlocks at 35h)" */
+function goalText(h) {
+  const g = nextGoal(h);
+  if (!g) return "You unlocked everything! 🏆 Legendary study buddy!";
+  return `Next goal: ${goalNames(g)} — study ${fmtLeft(g.at - h)} more (unlocks at ${g.at}h)`;
+}
+/* short line: "🎓 graduation cap in 3.5h" */
+function goalShort(h) {
+  const g = nextGoal(h);
+  return g ? `${goalNames(g)} in ${fmtLeft(g.at - h)}` : "";
+}
 
 const COATS = {
   persian: { label: "Persian", swatch: "#9ba6bd", body: "#9ba6bd", light: "#cdd4e0", ink: "#5b6478", eye: "#1b1b22", iris: "#f0932b", ear: "#e3a9b4" },
@@ -344,6 +424,8 @@ const COATS = {
     body: "#f8f4ee", light: "#ffffff", ink: "#8b6f5a", eye: "#1f2937", ear: "#f2a0a0",
     earL: "#f4a259", earR: "#374151", tail: "#f4a259", patches: true,
   },
+  tiger: { label: "Tiger", swatch: "#e8913a", body: "#e8913a", light: "#f7c98b", ink: "#5a2d0c", eye: "#1f2937", iris: "#7ccf4a", ear: "#f2a0a0", tail: "#c46a1d", stripes: true },
+  galaxy: { label: "Galaxy", swatch: "linear-gradient(135deg, #1e1b4b, #6d28d9)", body: "#312e81", light: "#4f46e5", ink: "#c7d2fe", eye: "#fde68a", ear: "#a78bfa", stars: true },
 };
 
 const CAT_LINES = {
@@ -436,9 +518,13 @@ function meow() {
 }
 
 function PetCat({ state, mood, paused, busy, phase, round, rounds, sessionsToday, sound, pet, event }) {
-  const { walk, bubbles, outfits, total } = pet;
+  const { walk, bubbles, outfits } = pet;
+  const hours = petHours(pet);
   const name = (pet.name || "").trim() || PET_DEFAULTS.name;
-  const c = COATS[pet.coat] || COATS.persian;
+  const coatKey = hours >= coatAt(pet.coat) ? pet.coat : "persian";
+  const c = COATS[coatKey] || COATS.persian;
+  const has = (key) => hours >= (REWARDS.find((r) => r.key === key)?.at ?? Infinity);
+  const hasToy = has("toy");
 
   const [petted, setPetted] = useState(false);
   const [celebrating, setCelebrating] = useState(0); // 0 = no, otherwise an id that restarts the burst
@@ -451,6 +537,7 @@ function PetCat({ state, mood, paused, busy, phase, round, rounds, sessionsToday
   const [flipping, setFlipping] = useState(false);
   const [ball, setBall] = useState(null); // { x, rot } while the yarn ball is out
   const [night, setNight] = useState(isNightNow);
+  const [bookNap, setBookNap] = useState(false); // napping on the book during a break (60h reward)
 
   const trackRef = useRef(null);
   const catRef = useRef(null);
@@ -465,8 +552,11 @@ function PetCat({ state, mood, paused, busy, phase, round, rounds, sessionsToday
   const celebratedAt = useRef(0);
   const prevState = useRef(state);
   const prevSessions = useRef(sessionsToday);
-  const prevTotal = useRef(total);
+  const prevTotal = useRef(hours);
   const eventSeen = useRef(0);
+  const nudgeSeen = useRef(pet.nudge?.id || 0);
+  const lastUnlockAt = useRef(0);
+  const hoursRef = useRef(hours);
   const clickCount = useRef(0);
   const lastClick = useRef(0);
   const ballRef = useRef(null);
@@ -480,6 +570,7 @@ function PetCat({ state, mood, paused, busy, phase, round, rounds, sessionsToday
   bubblesRef.current = bubbles;
   nameRef.current = name;
   nightRef.current = night;
+  hoursRef.current = hours;
   statusRef.current = { walking, petted, celebrating: !!celebrating, act, grumpy, flipping };
 
   const maxLeft = () => {
@@ -501,9 +592,10 @@ function PetCat({ state, mood, paused, busy, phase, round, rounds, sessionsToday
   }, []);
 
   const lineFor = () => {
-    if (state === "focus") return pickLine(NAP_LINES, lastLine);
+    if (state === "focus") return pickLine([...NAP_LINES, goalText(hoursRef.current)], lastLine);
     if (state === "wake") return pickLine(WAKE_LINES, lastLine);
     const pool = [...CAT_LINES[mood]];
+    pool.push(goalText(hoursRef.current), goalText(hoursRef.current)); // show the next goal often
     if (night) pool.push(...NIGHT_LINES);
     if (phase === "focus" && round > 0 && round < rounds) {
       const left = rounds - round;
@@ -579,7 +671,9 @@ function PetCat({ state, mood, paused, busy, phase, round, rounds, sessionsToday
     const id = setTimeout(() => {
       if (catGreeted) return;
       catGreeted = true;
-      say(sessionsToday === 0 ? "Hi! I'm {name}. Ready to study? 📚" : "Welcome back! 💕");
+      const goal = goalShort(hoursRef.current);
+      const hello = sessionsToday === 0 ? "Hi! I'm {name}. Ready to study? 📚" : "Welcome back! 💕";
+      say(goal ? `${hello} Next unlock: ${goal}` : hello, 6000);
     }, 1200);
     return () => clearTimeout(id);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -608,19 +702,39 @@ function PetCat({ state, mood, paused, busy, phase, round, rounds, sessionsToday
       say(pickLine(DONE_LINES, lastLine), 4500);
       clearTimeout(celebrateTimer.current);
       celebrateTimer.current = setTimeout(() => setCelebrating(0), 2400);
+      /* after the cheer, tell the person how far the next unlock is */
+      setTimeout(() => {
+        if (Date.now() - lastUnlockAt.current < 9000) return; // an unlock message already said it
+        say(goalText(hoursRef.current), 6000);
+      }, 4700);
     }
   }, [sessionsToday, say]);
 
-  /* a new outfit was unlocked */
+  /* something new was unlocked -> announce it and point at the next goal */
   useEffect(() => {
     const prev = prevTotal.current;
-    prevTotal.current = total;
-    if (total <= prev || !outfits) return undefined;
-    const unlocked = OUTFITS.find((o) => prev < o.at && total >= o.at);
-    if (!unlocked) return undefined;
-    const id = setTimeout(() => say(`New outfit unlocked: ${unlocked.label} ${unlocked.emoji}`, 5000), 2800);
+    prevTotal.current = hours;
+    if (hours <= prev) return undefined;
+    const fresh = REWARDS.filter((r) => prev < r.at && hours >= r.at);
+    if (!fresh.length) return undefined;
+    lastUnlockAt.current = Date.now();
+    const names = fresh.map((r) => `${r.emoji} ${KIND_WORD[r.kind] === "title" ? `title "${r.label}"` : r.label}`).join(" + ");
+    const goal = goalShort(hours);
+    const id = setTimeout(
+      () => say(`🎉 Unlocked: ${names}!${goal ? ` Next: ${goal}` : " That's everything! 🏆"}`, 8000),
+      2800
+    );
     return () => clearTimeout(id);
-  }, [total]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [hours]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* Settings asked the cat to say something (e.g. a locked coat was clicked) */
+  useEffect(() => {
+    const n = pet.nudge;
+    if (!n || !n.id || n.id === nudgeSeen.current) return;
+    nudgeSeen.current = n.id;
+    if (Date.now() - n.id > 3000) return;
+    say(n.text, 5500);
+  }, [pet.nudge]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* react to Skip / Reset */
   useEffect(() => {
@@ -641,7 +755,10 @@ function PetCat({ state, mood, paused, busy, phase, round, rounds, sessionsToday
     prevState.current = state;
     if (prev === state) return;
     if (Date.now() - celebratedAt.current < 1500) return; // the celebration wins
-    if (state === "focus") say("Shh… focus time 🤫");
+    if (state === "focus") {
+      const goal = goalShort(hoursRef.current);
+      say(goal ? `Shh… focus time 🤫 Next unlock: ${goal}` : "Shh… focus time 🤫", 5000);
+    }
     else if (state === "wake") say("Almost there! One last minute ✨", 3500);
     else if (state === "break") {
       say(phase === "long" ? "Long break — you earned it 🎉" : "Break time! Stretch & sip some water 💧");
@@ -682,10 +799,20 @@ function PetCat({ state, mood, paused, busy, phase, round, rounds, sessionsToday
     };
   }, [state]);
 
-  /* the yarn ball comes out during breaks */
+  /* 60h reward: on some breaks the cat naps on a book instead of playing */
+  useEffect(() => {
+    if (state === "break" && has("book") && Math.random() < 0.5) {
+      setBookNap(true);
+      say("Zzz… napping on my book 📖", 4500);
+    } else {
+      setBookNap(false);
+    }
+  }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* the yarn ball (or toy mouse) comes out during breaks */
   useEffect(() => {
     const track = trackRef.current;
-    if (state === "break" && walk && track) {
+    if (state === "break" && walk && track && !bookNap) {
       const maxB = Math.max(0, track.clientWidth - BALL_SIZE);
       const x = curLeft() < maxLeft() / 2 ? maxB - rand(0, 80) : rand(0, 80);
       ballRef.current = Math.min(maxB, Math.max(0, x));
@@ -695,12 +822,12 @@ function PetCat({ state, mood, paused, busy, phase, round, rounds, sessionsToday
       ballRef.current = null;
       setBall(null);
     }
-  }, [state, walk]);
+  }, [state, walk, bookNap]);
 
   /* wander along the card edge; stay put while napping or being petted;
      chase the yarn ball on breaks */
   useEffect(() => {
-    if (!walk || state === "focus" || state === "wake" || petted) {
+    if (!walk || state === "focus" || state === "wake" || petted || bookNap) {
       setPos((p) => (p.left == null ? p : { left: curLeft(), ms: 0 })); // freeze where it is
       setWalking(false);
       return undefined;
@@ -760,7 +887,7 @@ function PetCat({ state, mood, paused, busy, phase, round, rounds, sessionsToday
     };
     loop();
     return () => clearTimeout(timer);
-  }, [state, petted, walk]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [state, petted, walk, bookNap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function pet_() {
     const now = Date.now();
@@ -800,9 +927,19 @@ function PetCat({ state, mood, paused, busy, phase, round, rounds, sessionsToday
   }
 
   /* what the cat is wearing */
-  const headItem = !outfits ? null : night ? "nightcap" : seasonalHat() || (total >= 25 ? "crown" : null);
-  const wearBow = outfits && total >= 3;
-  const wearGlasses = outfits && total >= 10;
+  const heads = REWARDS.filter((r) => r.head && hours >= r.at);
+  const autoHead = heads.length ? heads[heads.length - 1].key : null; // best hat unlocked so far
+  let headItem = null;
+  if (outfits) {
+    if (night) headItem = "nightcap";
+    else if (pet.head === "none") headItem = null;
+    else if (pet.head && pet.head !== "auto" && heads.some((r) => r.key === pet.head)) headItem = pet.head;
+    else headItem = seasonalHat() || autoHead;
+  }
+  const wearBow = outfits && has("bow");
+  const wearGlasses = outfits && has("glasses");
+  const wearScarf = outfits && has("scarf");
+  const wearCape = outfits && has("cape");
 
   const cls = [
     "pet-cat",
@@ -817,6 +954,11 @@ function PetCat({ state, mood, paused, busy, phase, round, rounds, sessionsToday
 
   return (
     <div className="cat-track" ref={trackRef}>
+      {has("desk") && (
+        <span aria-hidden="true" title="Cozy study corner" style={{ position: "absolute", left: 6, bottom: 0, fontSize: 20, pointerEvents: "none", opacity: 0.9 }}>
+          🪴📚
+        </span>
+      )}
       {ball && (
         <button
           type="button"
@@ -826,11 +968,22 @@ function PetCat({ state, mood, paused, busy, phase, round, rounds, sessionsToday
           aria-label="Roll the yarn ball"
           title="Roll it!"
         >
+          {hasToy ? (
+            <svg viewBox="0 0 28 28" aria-hidden="true">
+              <path d="M4 19 Q-1 25 6 26" fill="none" stroke="#e5a3b4" strokeWidth="1.6" strokeLinecap="round" />
+              <ellipse cx="14" cy="17" rx="10" ry="7" fill="#9ca3af" />
+              <circle cx="22" cy="13" r="4.2" fill="#9ca3af" />
+              <circle cx="20" cy="8.6" r="3" fill="#e5a3b4" />
+              <circle cx="25" cy="9.6" r="3" fill="#e5a3b4" />
+              <circle cx="24.2" cy="12.4" r="1" fill="#111827" />
+            </svg>
+          ) : (
           <svg viewBox="0 0 28 28" aria-hidden="true">
             <circle cx="14" cy="14" r="12" fill="#f26d8d" />
             <path d="M4 12 Q14 6 24 12 M3 17 Q14 11 25 17 M8 5 Q17 14 10 24" fill="none" stroke="#ffd1dc" strokeWidth="1.6" strokeLinecap="round" />
             <path d="M22 21 Q27 24 25 27" fill="none" stroke="#f26d8d" strokeWidth="1.6" strokeLinecap="round" />
           </svg>
+          )}
         </button>
       )}
 
@@ -866,10 +1019,22 @@ function PetCat({ state, mood, paused, busy, phase, round, rounds, sessionsToday
           </div>
         )}
 
+        {has("companion") && (
+          <span aria-hidden="true" title="Kit, the kitten" style={{ position: "absolute", left: -24, bottom: 0, fontSize: 20, pointerEvents: "none" }}>
+            🐈
+          </span>
+        )}
+        {bookNap && (
+          <span aria-hidden="true" style={{ position: "absolute", left: "50%", bottom: -6, transform: "translateX(-50%)", fontSize: 22, pointerEvents: "none" }}>
+            📖
+          </span>
+        )}
+
         <div className="cat-bob" style={{ scale: facing === -1 ? "-1 1" : "1 1" }}>
           <button
             type="button"
             className="cat-body"
+            style={outfits && has("aura") ? { filter: "drop-shadow(0 0 7px rgba(251,191,36,.9))" } : undefined}
             onClick={pet_}
             aria-label={`Pet ${name}`}
             title={`Pet ${name}!`}
@@ -910,10 +1075,39 @@ function PetCat({ state, mood, paused, busy, phase, round, rounds, sessionsToday
               {/* body in profile */}
               <ellipse cx="54" cy="74" rx="36" ry="16" fill={c.body} stroke={c.line || "none"} strokeWidth="1.2" />
               {c.patches && <ellipse cx="34" cy="70" rx="14" ry="9" fill="#374151" clipPath="url(#cat-clip-body)" />}
+              {c.stripes && (
+                <g clipPath="url(#cat-clip-body)" stroke={c.ink} strokeWidth="3" strokeLinecap="round" opacity=".5">
+                  <line x1="30" y1="60" x2="33" y2="80" />
+                  <line x1="42" y1="58" x2="45" y2="82" />
+                  <line x1="54" y1="58" x2="57" y2="82" />
+                  <line x1="66" y1="60" x2="68" y2="80" />
+                </g>
+              )}
+              {c.stars && (
+                <g clipPath="url(#cat-clip-body)" fill="#ffffff">
+                  <circle cx="34" cy="68" r="1.5" /><circle cx="48" cy="74" r="1" /><circle cx="60" cy="66" r="1.6" />
+                  <circle cx="72" cy="76" r="1" /><circle cx="42" cy="82" r="1.2" /><circle cx="66" cy="84" r="1.2" />
+                </g>
+              )}
               <ellipse cx="56" cy="84" rx="26" ry="6" fill={c.light} opacity=".75" />
               {/* fluffy chest ruff under the chin */}
               <ellipse cx="82" cy="70" rx="14" ry="11" fill={c.body} />
 
+              {wearCape && (
+                <path d="M70 60 Q46 54 20 70 Q30 92 62 85 Q76 76 70 60 Z" fill="#7c3aed" stroke="#5b21b6" strokeWidth="1" />
+              )}
+              {wearScarf && (
+                <g>
+                  <path d="M66 66 Q80 78 96 66 L96 73 Q80 85 66 74 Z" fill="#f97316" />
+                  <rect x="70" y="74" width="7" height="15" rx="2.5" fill="#ea580c" />
+                </g>
+              )}
+              {headItem === "wizard" && (
+                <g>
+                  <line x1="86" y1="96" x2="106" y2="72" stroke="#92400e" strokeWidth="2.2" strokeLinecap="round" />
+                  <circle cx="107" cy="70.5" r="2.8" fill="#fde047" />
+                </g>
+              )}
               {wearBow && (
                 <g>
                   <polygon points="80,72 69,66 69,78" fill="#ef4444" />
@@ -939,6 +1133,18 @@ function PetCat({ state, mood, paused, busy, phase, round, rounds, sessionsToday
                   <g clipPath="url(#cat-clip-head)">
                     <ellipse cx="80" cy="38" rx="11" ry="8" fill="#f4a259" />
                     <ellipse cx="108" cy="58" rx="10" ry="8" fill="#374151" />
+                  </g>
+                )}
+                {c.stripes && (
+                  <g clipPath="url(#cat-clip-head)" stroke={c.ink} strokeWidth="2.4" strokeLinecap="round" opacity=".55">
+                    <line x1="94" y1="31" x2="94" y2="40" />
+                    <line x1="86" y1="32" x2="88" y2="39" />
+                    <line x1="102" y1="32" x2="100" y2="39" />
+                  </g>
+                )}
+                {c.stars && (
+                  <g clipPath="url(#cat-clip-head)" fill="#ffffff">
+                    <circle cx="82" cy="40" r="1.3" /><circle cx="106" cy="42" r="1.5" /><circle cx="96" cy="36" r="1" /><circle cx="110" cy="56" r="1" />
                   </g>
                 )}
                 <ellipse cx="94" cy="60" rx="11" ry="7" fill={c.light} opacity=".7" />
@@ -1009,6 +1215,26 @@ function PetCat({ state, mood, paused, busy, phase, round, rounds, sessionsToday
                     <circle cx="70" cy="19" r="1.5" fill="#22c55e" />
                   </g>
                 )}
+                {headItem === "gradcap" && (
+                  <g transform="translate(34 12)">
+                    <rect x="50" y="20" width="20" height="8" rx="2" fill="#374151" />
+                    <polygon points="38,16 60,8 82,16 60,24" fill="#1f2937" />
+                    <line x1="78" y1="16" x2="78" y2="30" stroke="#fbbf24" strokeWidth="1.6" />
+                    <circle cx="78" cy="31" r="2.2" fill="#fbbf24" />
+                  </g>
+                )}
+                {headItem === "wizard" && (
+                  <g transform="translate(34 12) rotate(-8 60 22)">
+                    <polygon points="45,22 61,-14 75,22" fill="#1d4ed8" />
+                    <ellipse cx="60" cy="22" rx="22" ry="5" fill="#1e3a8a" />
+                    <circle cx="58" cy="6" r="1.8" fill="#fde047" />
+                    <circle cx="65" cy="13" r="1.4" fill="#fde047" />
+                    <circle cx="56" cy="15" r="1.2" fill="#fde047" />
+                  </g>
+                )}
+                {headItem === "halo" && (
+                  <ellipse cx="94" cy="21" rx="13" ry="3.8" fill="none" stroke="#fde047" strokeWidth="2.6" />
+                )}
                 {headItem === "nightcap" && (
                   <g transform="translate(34 12)">
                     <path d="M42 24 Q50 -4 74 8 Q90 16 88 34 Q74 18 42 24 Z" fill="#6366f1" />
@@ -1041,12 +1267,16 @@ export default function PomodoroTimer({ pomodoro: p, subjects = [], sessionsToda
   }, []);
   const changePet = (patch) => setPet(updatePetStore(patch));
   const petName = (pet.name || "").trim() || PET_DEFAULTS.name;
-  const nextOutfit = OUTFITS.find((o) => pet.total < o.at);
+  const petHrs = petHours(pet);
+  const goal = nextGoal(petHrs);
+  const prevAt = Math.max(0, ...REWARDS.filter((r) => r.at <= petHrs).map((r) => r.at));
+  const goalPct = goal ? Math.min(100, Math.round(((petHrs - prevAt) / (goal.at - prevAt)) * 100)) : 100;
+  const petTitle = titleFor(petHrs);
   const petProgress =
-    `${petName} has studied with you for ${pet.total} ${pet.total === 1 ? "session" : "sessions"}` +
-    (nextOutfit
-      ? ` · next outfit: ${nextOutfit.emoji} ${nextOutfit.label} at ${nextOutfit.at}`
-      : " · all outfits unlocked 🎉");
+    `${petName} has studied with you for ${fmtHours(petHrs)}` +
+    (petTitle ? ` · title: ${petTitle.emoji} ${petTitle.label}` : "") +
+    ` · ${goalText(petHrs)}`;
+  const heads = REWARDS.filter((r) => r.head);
 
   /* the cat naps while you focus, but wakes for the last minute */
   const nearEnd = running && phase === "focus" && remaining > 0 && remaining <= 60 && p.total > 120;
@@ -1256,23 +1486,73 @@ export default function PomodoroTimer({ pomodoro: p, subjects = [], sessionsToda
             <div className="pomo-field">
               <span>Coat</span>
               <div className="pomo-coats" role="group" aria-label="Coat colour">
-                {Object.entries(COATS).map(([key, coat]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    className={pet.coat === key ? "pomo-coat active" : "pomo-coat"}
-                    style={{ "--coat": coat.swatch }}
-                    aria-label={coat.label}
-                    aria-pressed={pet.coat === key}
-                    title={coat.label}
-                    onClick={() => changePet({ coat: key })}
-                  />
-                ))}
+                {Object.entries(COATS).map(([key, coat]) => {
+                  const at = coatAt(key);
+                  const locked = petHrs < at;
+                  const lockMsg = `🔒 ${coat.label} coat unlocks at ${at}h — study ${fmtLeft(at - petHrs)} more!`;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      className={pet.coat === key ? "pomo-coat active" : "pomo-coat"}
+                      style={locked ? { "--coat": coat.swatch, opacity: 0.35, cursor: "not-allowed" } : { "--coat": coat.swatch }}
+                      aria-label={locked ? `${coat.label} (locked until ${at} hours)` : coat.label}
+                      aria-pressed={pet.coat === key}
+                      title={locked ? lockMsg : coat.label}
+                      onClick={() => (locked ? changePet({ nudge: { text: lockMsg, id: Date.now() } }) : changePet({ coat: key }))}
+                    />
+                  );
+                })}
               </div>
             </div>
           </div>
 
+          <label className="pomo-field">
+            <span>Hat</span>
+            <div className="pomo-field-input">
+              <select value={pet.head || "auto"} onChange={(e) => changePet({ head: e.target.value })}>
+                <option value="auto">Auto (best unlocked)</option>
+                <option value="none">No hat</option>
+                {heads.map((r) => (
+                  <option key={r.key} value={r.key} disabled={petHrs < r.at}>
+                    {r.emoji} {r.label}{petHrs < r.at ? ` — 🔒 ${r.at}h` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </label>
+
           <p className="pomo-note">{petProgress}</p>
+          {goal && (
+            <div aria-hidden="true" style={{ height: 6, borderRadius: 99, background: "rgba(127,127,127,.25)", overflow: "hidden", margin: "6px 0 10px" }}>
+              <div style={{ width: `${goalPct}%`, height: "100%", background: "#f59e0b" }} />
+            </div>
+          )}
+
+          <h4 style={{ margin: "10px 0 4px", fontSize: 13 }}>Rewards ({fmtHours(petHrs)} studied)</h4>
+          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 4, fontSize: 13 }}>
+            {REWARDS.map((r) => {
+              const done = petHrs >= r.at;
+              return (
+                <li key={r.key} style={{ display: "flex", justifyContent: "space-between", gap: 8, opacity: done ? 1 : 0.7 }}>
+                  <span>
+                    {done ? "✅" : "🔒"} {r.emoji} {r.label} <small>({KIND_WORD[r.kind]})</small>
+                  </span>
+                  <span>{done ? "unlocked" : `${r.at}h · ${fmtLeft(r.at - petHrs)} to go`}</span>
+                </li>
+              );
+            })}
+            <li style={{ display: "flex", justifyContent: "space-between", gap: 8, opacity: (Number(pet.bestStreak) || 0) >= STREAK_BADGE.days ? 1 : 0.7 }}>
+              <span>
+                {(Number(pet.bestStreak) || 0) >= STREAK_BADGE.days ? "✅" : "🔒"} {STREAK_BADGE.emoji} {STREAK_BADGE.label} <small>(badge)</small>
+              </span>
+              <span>
+                {(Number(pet.bestStreak) || 0) >= STREAK_BADGE.days
+                  ? "earned"
+                  : `${STREAK_BADGE.days}-day streak · now ${Number(pet.streak) || 0}`}
+              </span>
+            </li>
+          </ul>
         </div>
       </details>
     </section>
