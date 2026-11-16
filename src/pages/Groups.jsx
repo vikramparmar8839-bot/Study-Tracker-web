@@ -6,6 +6,7 @@ import { useGroupPresence } from '../hooks/useGroupPresence';
 import { fmtDuration } from './Leaderboard';
 import GroupChat from './GroupChat';
 import { useGroupChat } from '../hooks/useGroupChat';
+import { useLastSeen, useLastSeenHeartbeat, lastSeenInfo } from '../hooks/useLastSeen';
 import './social.css';
 import './groups-status.css';
 
@@ -13,9 +14,13 @@ const formatClock = (sec) =>
   `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
 
 /* small live-status chip shown next to each member */
-function MemberStatus({ info }) {
-  if (!info || info.state === 'idle') return <span className="st-status idle">Not studying</span>;
-  const label = info.state === 'focus' ? '🔥 Focusing' : '☕ On break';
+function MemberStatus({ info, lastSeen }) {
+  if (!info || info.state === 'idle') {
+    const seen = lastSeenInfo(lastSeen);
+    if (seen?.online) return <span className="st-status idle online">Online</span>;
+    return <span className="st-status idle">{seen ? `Last seen ${seen.text}` : 'Not studying'}</span>;
+  }
+  const label = info.state === 'focus' ? 'Focusing' : 'On break';
   return (
     <span className={`st-status ${info.state}`}>
       {label} · {info.paused ? 'paused' : `${formatClock(info.remaining)} left`}
@@ -23,11 +28,49 @@ function MemberStatus({ info }) {
   );
 }
 
+/* medals for the top 3; "–" while nobody has studied yet (avoids two #1s on a 0m tie) */
+const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉' };
+const MEDAL_CLASS = { 1: 'gold', 2: 'silver', 3: 'bronze' };
+function RankBadge({ rank, totalSec }) {
+  if (!(totalSec > 0)) return <span className="st-rank none" title="No study time yet">–</span>;
+  const medal = MEDALS[rank];
+  return <span className={`st-rank ${medal ? MEDAL_CLASS[rank] : ''}`}>{medal || `#${rank}`}</span>;
+}
+
+/* round initial badge with a colour derived from the user id */
+function Avatar({ name, id }) {
+  const initial = (name || '?').trim().charAt(0).toUpperCase() || '?';
+  const hue = [...String(id)].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
+  return <span className="st-avatar" style={{ '--h': hue }} aria-hidden="true">{initial}</span>;
+}
+
 function GroupRoom({ group, onLeave, notify }) {
   const { user } = useAuth();
   const [rows, setRows] = useState([]);
+  const seen = useLastSeen(rows.map((r) => r.user_id));
   const [minutes, setMinutes] = useState(25);
   const [chatOpen, setChatOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+
+  const copyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(group.invite_code);
+      setCopied(true);
+    } catch { /* clipboard blocked: the code is still visible to select */ }
+  };
+  useEffect(() => {
+    if (!copied) return undefined;
+    const id = setTimeout(() => setCopied(false), 1800);
+    return () => clearTimeout(id);
+  }, [copied]);
+
+  // leaving needs a second click within 3s so it can't happen by accident
+  useEffect(() => {
+    if (!confirmLeave) return undefined;
+    const id = setTimeout(() => setConfirmLeave(false), 3000);
+    return () => clearTimeout(id);
+  }, [confirmLeave]);
 
   // chat lives here (not inside GroupChat) so the history stays loaded when you hide it
   const chat = useGroupChat(group.id);
@@ -80,9 +123,19 @@ function GroupRoom({ group, onLeave, notify }) {
       <div className="st-group-head">
         <div>
           <h3>{group.name}</h3>
-          <small>Invite code: <code>{group.invite_code}</code></small>
+          <div className="st-code-row">
+            <small>Invite code: <code>{group.invite_code}</code></small>
+            <button type="button" className="ghost st-copy" onClick={copyCode} aria-label="Copy invite code">
+              {copied ? 'Copied ✓' : 'Copy'}
+            </button>
+          </div>
         </div>
-        <button className="ghost" onClick={() => onLeave(group)}>Leave</button>
+        <button
+          className={`ghost st-leave${confirmLeave ? ' danger' : ''}`}
+          onClick={() => (confirmLeave ? onLeave(group) : setConfirmLeave(true))}
+        >
+          {confirmLeave ? 'Confirm leave?' : 'Leave'}
+        </button>
       </div>
 
       <div className="st-timer">
@@ -113,16 +166,23 @@ function GroupRoom({ group, onLeave, notify }) {
         </div>
       </div>
 
-      <h4>This week</h4>
+      <div className="st-week-head">
+        <h4>This week</h4>
+        <span className="st-total">👥 {fmtDuration(rows.reduce((a, r) => a + Number(r.total_sec || 0), 0))} together</span>
+      </div>
       <ol className="st-board compact">
         {rows.map((r) => {
           const isMe = r.user_id === user.id;
           return (
-            <li key={r.user_id} className={r.is_me ? 'me' : ''}>
-              <span className="st-rank">#{r.rank}</span>
+            <li key={r.user_id} className={isMe || r.is_me ? 'me' : ''}>
+              <RankBadge rank={r.rank} totalSec={Number(r.total_sec)} />
+              <Avatar name={r.display_name} id={r.user_id} />
               <span className="st-who">
                 <strong>{r.display_name}{isMe && ' (you)'}</strong>
-                <MemberStatus info={isMe ? myInfo : presence[r.user_id]} />
+                <MemberStatus
+                  info={isMe ? myInfo : presence[r.user_id]}
+                  lastSeen={isMe ? new Date().toISOString() : seen[r.user_id]}
+                />
               </span>
               <span className="st-time">{fmtDuration(Number(r.total_sec))}</span>
             </li>
@@ -152,6 +212,7 @@ function GroupRoom({ group, onLeave, notify }) {
 
 export default function Groups({ notify }) {
   const { user } = useAuth();
+  useLastSeenHeartbeat(); // better: move this call to the app-wide layout so it also runs on other pages
   const [groups, setGroups] = useState([]);
   const [name, setName] = useState('');
   const [code, setCode] = useState('');

@@ -9,21 +9,222 @@
 .st-status {
   display: inline-flex;
   align-items: center;
-  padding: 2px 10px;
+  gap: 6px;
+  padding: 3px 11px;
   border-radius: 999px;
   font-size: 0.75rem;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   white-space: nowrap;
-  background: rgba(255, 255, 255, 0.07);
-  color: rgba(255, 255, 255, 0.55);
+  font-variant-numeric: tabular-nums;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.5);
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 
+/* small status dot (idle = hollow grey) */
+.st-status::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.28);
+  flex: none;
+}
+
+/* studying right now: pulsing indigo dot */
 .st-status.focus {
-  background: rgba(124, 124, 255, 0.2);
-  color: #aeb0ff;
+  background: rgba(124, 124, 255, 0.18);
+  border-color: rgba(124, 124, 255, 0.35);
+  color: #c4c6ff;
+}
+.st-status.focus::before {
+  background: #8f93ff;
+  box-shadow: 0 0 0 0 rgba(143, 147, 255, 0.65);
+  animation: st-pulse-focus 1.8s ease-out infinite;
 }
 
+/* on a break: pulsing green dot */
 .st-status.break {
-  background: rgba(80, 200, 140, 0.18);
-  color: #7fe0b0;
+  background: rgba(80, 200, 140, 0.16);
+  border-color: rgba(80, 200, 140, 0.32);
+  color: #8ce8ba;
 }
+.st-status.break::before {
+  background: #5fd39a;
+  box-shadow: 0 0 0 0 rgba(95, 211, 154, 0.6);
+  animation: st-pulse-break 1.8s ease-out infinite;
+}
+
+@keyframes st-pulse-focus {
+  0%   { box-shadow: 0 0 0 0 rgba(143, 147, 255, 0.65); }
+  70%  { box-shadow: 0 0 0 7px rgba(143, 147, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(143, 147, 255, 0); }
+}
+@keyframes st-pulse-break {
+  0%   { box-shadow: 0 0 0 0 rgba(95, 211, 154, 0.6); }
+  70%  { box-shadow: 0 0 0 7px rgba(95, 211, 154, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(95, 211, 154, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .st-status.focus::before,
+  .st-status.break::before { animation: none; }
+}
+
+/* ---------- rank badge (use on the leaderboard rank cell) ---------- */
+.st-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.05);
+  font-variant-numeric: tabular-nums;
+}
+/* medal ranks use the emoji itself, so just give them a soft glow */
+.st-rank.gold   { background: rgba(240, 191, 99, 0.16); font-size: 1.25rem; }
+.st-rank.silver { background: rgba(200, 210, 230, 0.14); font-size: 1.25rem; }
+.st-rank.bronze { background: rgba(205, 127, 80, 0.16);  font-size: 1.25rem; }
+/* nobody has studied yet: shows "–" */
+.st-rank.none   { color: rgba(255, 255, 255, 0.3); }
+
+/* ---------- leaderboard rows: rank · name + status on the left, time on the right ---------- */
+.st-board.compact li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.st-board.compact li + li { margin-top: 8px; }
+.st-board.compact li:hover { background: rgba(255, 255, 255, 0.055); }
+
+/* your own row stands out */
+.st-board.compact li.me {
+  background: rgba(124, 124, 255, 0.12);
+  border-color: rgba(124, 124, 255, 0.35);
+}
+.st-board.compact li.me strong { color: #b4b7ff; }
+
+.st-board.compact .st-rank { flex: none; }
+.st-board.compact .st-who {
+  flex: 1;
+  min-width: 0;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  text-align: left;
+}
+.st-board.compact .st-who strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.st-board.compact .st-time {
+  flex: none;
+  margin-left: auto;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- group header: invite code + copy, leave ---------- */
+.st-code-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.st-code-row code {
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.07);
+  letter-spacing: 0.08em;
+  user-select: all;
+}
+.st-copy {
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.st-leave { transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease; }
+.st-leave:hover,
+.st-leave.danger {
+  color: #f08080;
+  border-color: rgba(240, 128, 128, 0.45);
+  background: rgba(240, 128, 128, 0.12);
+}
+
+/* ---------- timer card ---------- */
+.st-group .st-timer {
+  margin: 18px 0 8px;
+  padding: 22px 16px 20px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(124, 124, 255, 0.09), rgba(255, 255, 255, 0.02));
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.st-group .st-clock {
+  font-size: clamp(3rem, 8vw, 4.5rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(180deg, #ffffff, #b9bcff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ---------- "This week" heading + group total ---------- */
+.st-week-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 22px 0 10px;
+}
+.st-week-head h4 { margin: 0; }
+.st-total {
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #c4c6ff;
+  background: rgba(124, 124, 255, 0.14);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- avatar ---------- */
+.st-avatar {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, hsl(var(--h) 70% 55%), hsl(calc(var(--h) + 40) 70% 42%));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* ---------- online (idle but app open): steady green dot, no pulse ---------- */
+.st-status.idle.online {
+  color: #8ce8ba;
+  background: rgba(80, 200, 140, 0.1);
+  border-color: rgba(80, 200, 140, 0.25);
+}
+.st-status.idle.online::before { background: #5fd39a; }
