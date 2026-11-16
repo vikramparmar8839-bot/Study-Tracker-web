@@ -365,7 +365,7 @@ const REWARDS = [
   { key: "t_kitten", kind: "title", label: "Curious Kitten", emoji: "🐱", at: 1 },
   { key: "glasses", kind: "outfit", label: "glasses", emoji: "🕶️", at: 5 },
   { key: "t_napper", kind: "title", label: "Cozy Napper", emoji: "😴", at: 5 },
-  { key: "toy", kind: "behavior", label: "toy mouse to chase on breaks", emoji: "🐭", at: 8 },
+  { key: "toy", kind: "behavior", label: "toy mouse to chase on breaks", short: "toy mouse", emoji: "🐭", at: 8 },
   { key: "scarf", kind: "outfit", label: "cozy scarf", emoji: "🧣", at: 10 },
   { key: "t_tabby", kind: "title", label: "Focused Tabby", emoji: "🐯", at: 10 },
   { key: "c_black", kind: "coat", coat: "black", label: "Black coat", emoji: "🖤", at: 12 },
@@ -400,11 +400,13 @@ function nextGoal(h) {
   return { at, items: next.filter((r) => r.at === at) };
 }
 const goalNames = (g) => g.items.map((r) => `${r.emoji} ${r.label}`).join(" + ");
-/* full line: "Next goal: 🎓 graduation cap — study 3.5h more (unlocks at 35h)" */
+/* compact line: "🎓 Next: graduation cap · 3.5h to go" */
 function goalText(h) {
   const g = nextGoal(h);
   if (!g) return "You unlocked everything! 🏆 Legendary study buddy!";
-  return `Next goal: ${goalNames(g)} — study ${fmtLeft(g.at - h)} more (unlocks at ${g.at}h)`;
+  const emojis = g.items.map((r) => r.emoji).join(" ");
+  const names = g.items.map((r) => r.short || r.label).join(" + ");
+  return `${emojis} Next: ${names} · ${fmtLeft(g.at - h)} to go`;
 }
 /* short line: "🎓 graduation cap in 3.5h" */
 function goalShort(h) {
