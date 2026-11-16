@@ -228,3 +228,44 @@
   border-color: rgba(80, 200, 140, 0.25);
 }
 .st-status.idle.online::before { background: #5fd39a; }
+
+/* ---------- avatar status ring ---------- */
+.st-avatar { position: relative; transition: opacity 0.2s ease, filter 0.2s ease; }
+
+.st-avatar.ring-online,
+.st-avatar.ring-break,
+.st-avatar.ring-focus {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.st-avatar.ring-online { --ring: #5fd39a; }
+.st-avatar.ring-break  { --ring: #5fd39a; }
+.st-avatar.ring-focus  { --ring: #8f93ff; }
+
+/* studying / on break: a ring that keeps pulsing outwards */
+.st-avatar.ring-focus::after,
+.st-avatar.ring-break::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 2px solid var(--ring);
+  pointer-events: none;
+  animation: st-ring-pulse 1.8s ease-out infinite;
+}
+@keyframes st-ring-pulse {
+  0%   { transform: scale(1.1);  opacity: 0.75; }
+  100% { transform: scale(1.5);  opacity: 0; }
+}
+
+/* not around: dimmed so active people stand out */
+.st-avatar.ring-offline { opacity: 0.5; filter: saturate(0.6); }
+
+@media (prefers-reduced-motion: reduce) {
+  .st-avatar.ring-focus::after,
+  .st-avatar.ring-break::after { animation: none; opacity: 0; }
+}
+
+/* ---------- stickman avatar ---------- */
+.st-avatar { color: #fff; }
+.st-avatar svg { display: block; width: 100%; height: 100%; }
