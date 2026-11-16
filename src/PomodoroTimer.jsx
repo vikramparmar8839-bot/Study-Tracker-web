@@ -1,5 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import { saveFocusSession } from "./lib/api"; // adjust the path if this file lives elsewhere
+import { playAlarm, unlockAlarm } from "./lib/alarm"; // adjust the path if this file lives elsewhere
 
 /* ------------------------------------------------------------------
    Pomodoro timer for StudyTrack
@@ -218,7 +219,7 @@ export function usePomodoro({ subjects = [], onSessionComplete } = {}) {
   }
 
   function finishPhase() {
-    if (settings.sound) beep();
+    if (settings.sound) playAlarm();
 
     if (phase === "focus") {
       onSessionComplete?.({ subject, minutes: settings.focus });
@@ -238,6 +239,7 @@ export function usePomodoro({ subjects = [], onSessionComplete } = {}) {
   }
 
   function start() {
+    unlockAlarm(); // lets the browser play the sound when the timer ends
     endRef.current = Date.now() + remaining * 1000;
     setRunning(true);
   }

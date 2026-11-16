@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { playAlarm } from '../lib/alarm';
 import { saveSession, memberStatusSet, memberStatusTouch, SESSION_SAVED_EVENT } from '../lib/api';
 
 /**
@@ -78,7 +79,10 @@ export function useMemberTimer(groupId, { onSessionSaved } = {}) {
       if (s.status !== 'running') return;
       const r = calc(s);
       setRemaining(r);
-      if (r === 0) finish(s, Date.now());
+      if (r === 0) {
+        playAlarm(); // timer finished: ring for a few seconds
+        finish(s, Date.now());
+      }
     }, 250);
     return () => clearInterval(id);
   }, [t.status, groupId]); // eslint-disable-line react-hooks/exhaustive-deps

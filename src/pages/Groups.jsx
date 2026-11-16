@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { createGroup, joinGroup, listMyGroups, leaveGroup, groupLeaderboard } from '../lib/api';
 import { useMemberTimer } from '../hooks/useMemberTimer';
+import { unlockAlarm } from '../lib/alarm';
 import { useGroupPresence } from '../hooks/useGroupPresence';
 import { fmtDuration } from './Leaderboard';
 import GroupChat from './GroupChat';
@@ -169,6 +170,7 @@ function GroupRoom({ group, onLeave, notify, onStudied }) {
       onStudied?.(secs); // also count this time in the main daily goal / total study hours
     },
   });
+
   // live status of everybody in the group
   const presence = useGroupPresence(group.id);
 
@@ -226,12 +228,12 @@ function GroupRoom({ group, onLeave, notify, onStudied }) {
               <select value={minutes} onChange={(e) => setMinutes(Number(e.target.value))}>
                 {[15, 25, 35, 45, 60, 90].map((m) => <option key={m} value={m}>{m} min</option>)}
               </select>
-              <button onClick={() => mine.start('focus', minutes)}>Start my focus</button>
-              <button className="ghost" onClick={() => mine.start('break', 5)}>5 min break</button>
+              <button onClick={() => { unlockAlarm(); mine.start('focus', minutes); }}>Start my focus</button>
+              <button className="ghost" onClick={() => { unlockAlarm(); mine.start('break', 5); }}>5 min break</button>
             </>
           )}
           {mine.status === 'running' && <button onClick={mine.pause}>Pause</button>}
-          {mine.status === 'paused' && <button onClick={mine.resume}>Resume</button>}
+          {mine.status === 'paused' && <button onClick={() => { unlockAlarm(); mine.resume(); }}>Resume</button>}
           {mine.status !== 'idle' && (
             <button
               className="ghost"
