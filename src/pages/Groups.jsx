@@ -117,7 +117,7 @@ function Avatar({ name, id, status }) {
   );
 }
 
-function GroupRoom({ group, onLeave, notify }) {
+function GroupRoom({ group, onLeave, notify, onStudied }) {
   const { user } = useAuth();
   const [rows, setRows] = useState([]);
   const seen = useLastSeen(rows.map((r) => r.user_id));
@@ -163,7 +163,12 @@ function GroupRoom({ group, onLeave, notify }) {
   const loadBoard = useCallback(() => groupLeaderboard(group.id, 'week').then(setRows).catch(() => {}), [group.id]);
 
   // MY OWN timer: only I can start / pause / stop it
-  const mine = useMemberTimer(group.id, { onSessionSaved: loadBoard });
+  const mine = useMemberTimer(group.id, {
+    onSessionSaved: (row, secs) => {
+      loadBoard();
+      onStudied?.(secs); // also count this time in the main daily goal / total study hours
+    },
+  });
   // live status of everybody in the group
   const presence = useGroupPresence(group.id);
 
@@ -285,7 +290,7 @@ function GroupRoom({ group, onLeave, notify }) {
   );
 }
 
-export default function Groups({ notify }) {
+export default function Groups({ notify, onStudied }) {
   const { user } = useAuth();
   useLastSeenHeartbeat(); // better: move this call to the app-wide layout so it also runs on other pages
   const [groups, setGroups] = useState([]);
@@ -320,7 +325,7 @@ export default function Groups({ notify }) {
       {msg && <p className="st-error">{msg}</p>}
 
       {groups.map((g) => (
-        <GroupRoom key={g.id} group={g} notify={notify} onLeave={(grp) => run(() => leaveGroup(grp.id, user.id))} />
+        <GroupRoom key={g.id} group={g} notify={notify} onStudied={onStudied} onLeave={(grp) => run(() => leaveGroup(grp.id, user.id))} />
       ))}
       {groups.length === 0 && <p className="st-muted">You're not in any group yet. Create one or paste an invite code.</p>}
     </section>

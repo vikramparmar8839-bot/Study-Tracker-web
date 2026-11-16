@@ -48,7 +48,7 @@ export function useMemberTimer(groupId, { onSessionSaved } = {}) {
     saveSession({ startedAt: endedAtMs - secs * 1000, endedAt: endedAtMs, groupId })
       .then((row) => {
         window.dispatchEvent(new Event(SESSION_SAVED_EVENT));
-        onSessionSaved?.(row);
+        onSessionSaved?.(row, secs);   // secs = real seconds studied, so the app can log it too
       })
       .catch((e) => console.error('Could not save group session', e));
   }
