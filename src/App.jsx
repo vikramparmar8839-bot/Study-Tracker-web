@@ -889,22 +889,23 @@ function App() {
           <div className="panel-header">
             <div>
               <h2>Subject Overview</h2>
-              <p>Keep an eye on attendance and study time.</p>
+              <p>Keep an eye on attendance and study time (last 7 days).</p>
             </div>
           </div>
 
           <div className="dashboard-subjects">
             {subjects.map((subject) => {
               const studyTime =
-                subjectStudyTotals.find((item) => item.name === subject.name)
-                  ?.minutes || 0;
+                weeklySubjectStudyTotals.find(
+                  (item) => item.name === subject.name
+                )?.minutes || 0;
 
               return (
                 <div className="dashboard-subject" key={subject.id}>
                   <div>
                     <strong>{subject.name}</strong>
                     <span>
-                      Attendance: {getPercentage(subject)}% · Study:{" "}
+                      Attendance: {getPercentage(subject)}% · Study (7d):{" "}
                       {formatStudyTime(studyTime)}
                     </span>
                   </div>
