@@ -15,7 +15,7 @@ const formatClock = (sec) =>
   `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
 
 /* small live-status chip shown next to each member */
-function MemberStatus({ info, lastSeen }) {
+export function MemberStatus({ info, lastSeen }) {
   if (!info || info.state === 'idle') {
     const seen = lastSeenInfo(lastSeen);
     if (seen?.online) return <span className="st-status idle online">Online</span>;
@@ -32,7 +32,7 @@ function MemberStatus({ info, lastSeen }) {
 /* medals for the top 3; "–" while nobody has studied yet (avoids two #1s on a 0m tie) */
 const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉' };
 const MEDAL_CLASS = { 1: 'gold', 2: 'silver', 3: 'bronze' };
-function RankBadge({ rank, totalSec }) {
+export function RankBadge({ rank, totalSec }) {
   if (!(totalSec > 0)) return <span className="st-rank none" title="No study time yet">–</span>;
   const medal = MEDALS[rank];
   return <span className={`st-rank ${medal ? MEDAL_CLASS[rank] : ''}`}>{medal || `#${rank}`}</span>;
@@ -104,7 +104,7 @@ function Stickman({ n, status }) {
   );
 }
 
-function Avatar({ name, id, status }) {
+export function Avatar({ name, id, status }) {
   const n = [...String(id)].reduce((a, c) => a + c.charCodeAt(0), 0);
   return (
     <span

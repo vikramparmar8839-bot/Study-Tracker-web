@@ -10,6 +10,7 @@ import { useAuth } from "./context/AuthContext";
 import Leaderboard from "./pages/Leaderboard";
 import Friends from "./pages/Friends";
 import Groups from "./pages/Groups";
+import DashboardGroupCard from "./pages/DashboardGroupCard";
 import { useChatNotifications } from "./hooks/useChatNotifications";
 import {
   parseSyllabus,
@@ -885,38 +886,10 @@ function App() {
           </div>
         </div>
 
-        <section className="panel">
-          <div className="panel-header">
-            <div>
-              <h2>Subject Overview</h2>
-              <p>Keep an eye on attendance and study time (last 7 days).</p>
-            </div>
-          </div>
-
-          <div className="dashboard-subjects">
-            {subjects.map((subject) => {
-              const studyTime =
-                weeklySubjectStudyTotals.find(
-                  (item) => item.name === subject.name
-                )?.minutes || 0;
-
-              return (
-                <div className="dashboard-subject" key={subject.id}>
-                  <div>
-                    <strong>{subject.name}</strong>
-                    <span>
-                      Attendance: {getPercentage(subject)}% · Study (7d):{" "}
-                      {formatStudyTime(studyTime)}
-                    </span>
-                  </div>
-                  <div className="dashboard-attendance">
-                    {getPercentage(subject)}%
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
+        <DashboardGroupCard
+          notify={chatNotify}
+          onOpen={() => navigateTo("groups")}
+        />
 
         <div
           style={{
