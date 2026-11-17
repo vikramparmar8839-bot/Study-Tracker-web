@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { createGroup, joinGroup, listMyGroups, leaveGroup, groupLeaderboard } from '../lib/api';
-import { useMemberTimer } from '../hooks/useMemberTimer';
+import { createGroup, joinGroup, listMyGroups, leaveGroup, groupLeaderboard, SESSION_SAVED_EVENT } from '../lib/api';
 import { unlockAlarm } from '../lib/alarm';
 import { useGroupPresence } from '../hooks/useGroupPresence';
 import { fmtDuration } from './Leaderboard';
@@ -118,11 +117,10 @@ export function Avatar({ name, id, status }) {
   );
 }
 
-function GroupRoom({ group, onLeave, notify, onStudied }) {
+function GroupRoom({ group, onLeave, notify, pomodoro }) {
   const { user } = useAuth();
   const [rows, setRows] = useState([]);
   const seen = useLastSeen(rows.map((r) => r.user_id));
-  const [minutes, setMinutes] = useState(25);
   const [chatOpen, setChatOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
@@ -163,13 +161,16 @@ function GroupRoom({ group, onLeave, notify, onStudied }) {
 
   const loadBoard = useCallback(() => groupLeaderboard(group.id, 'week').then(setRows).catch(() => {}), [group.id]);
 
-  // MY OWN timer: only I can start / pause / stop it
-  const mine = useMemberTimer(group.id, {
-    onSessionSaved: (row, secs) => {
-      loadBoard();
-      onStudied?.(secs); // also count this time in the main daily goal / total study hours
-    },
-  });
+  // MY timer is the same Pomodoro timer as on the Dashboard; it just gets attached to this group
+  const attached = pomodoro.groupId === group.id;
+  const live = attached && pomodoro.locked;
+  const busyElsewhere = pomodoro.locked && !attached;
+
+  // refresh the board as soon as my session is saved
+  useEffect(() => {
+    window.addEventListener(SESSION_SAVED_EVENT, loadBoard);
+    return () => window.removeEventListener(SESSION_SAVED_EVENT, loadBoard);
+  }, [loadBoard]);
 
   // live status of everybody in the group
   const presence = useGroupPresence(group.id);
@@ -188,15 +189,15 @@ function GroupRoom({ group, onLeave, notify, onStudied }) {
   }, [focusingKey, loadBoard]);
 
   // for myself use the local timer so the chip reacts instantly
-  const myInfo =
-    mine.status === 'idle'
-      ? { state: 'idle' }
-      : { state: mine.mode, paused: mine.status === 'paused', remaining: mine.remaining };
+  const myInfo = live
+    ? { state: pomodoro.phase === 'focus' ? 'focus' : 'break', paused: !pomodoro.running, remaining: pomodoro.remaining }
+    : { state: 'idle' };
 
   const stateLabel =
-    mine.status === 'idle' ? 'Ready'
-    : mine.status === 'paused' ? 'Paused'
-    : mine.mode === 'focus' ? 'Focus' : 'Break';
+    busyElsewhere ? 'Your timer is running for another group (or just you)'
+    : !live ? 'Ready'
+    : !pomodoro.running ? 'Paused'
+    : pomodoro.phase === 'focus' ? 'Focus' : 'Break';
 
   return (
     <div className="st-group glass">
@@ -219,31 +220,51 @@ function GroupRoom({ group, onLeave, notify, onStudied }) {
       </div>
 
       <div className="st-timer">
-        <div className="st-clock">{formatClock(mine.remaining)}</div>
+        <div className="st-clock">{formatClock(busyElsewhere ? 0 : pomodoro.remaining)}</div>
         <small>{stateLabel}</small>
 
-        <div className="st-timer-controls">
-          {mine.status === 'idle' && (
-            <>
-              <select value={minutes} onChange={(e) => setMinutes(Number(e.target.value))}>
-                {[15, 25, 35, 45, 60, 90].map((m) => <option key={m} value={m}>{m} min</option>)}
+        {!busyElsewhere && (
+          <div className="st-timer-controls">
+            {!pomodoro.locked && pomodoro.phase === 'focus' && (
+              <select
+                value={pomodoro.settings.focus}
+                onChange={(e) => pomodoro.update('focus')(Number(e.target.value))}
+              >
+                {[...new Set([15, 25, 35, 45, 60, 90, pomodoro.settings.focus])]
+                  .sort((a, b) => a - b)
+                  .map((m) => <option key={m} value={m}>{m} min</option>)}
               </select>
-              <button onClick={() => { unlockAlarm(); mine.start('focus', minutes); }}>Start my focus</button>
-              <button className="ghost" onClick={() => { unlockAlarm(); mine.start('break', 5); }}>5 min break</button>
-            </>
-          )}
-          {mine.status === 'running' && <button onClick={mine.pause}>Pause</button>}
-          {mine.status === 'paused' && <button onClick={() => { unlockAlarm(); mine.resume(); }}>Resume</button>}
-          {mine.status !== 'idle' && (
-            <button
-              className="ghost"
-              onClick={mine.stop}
-              title={mine.mode === 'focus' ? 'Log the time you studied so far (needs at least 1 minute)' : 'Stop the break'}
-            >
-              {mine.mode === 'focus' ? 'Finish' : 'Stop'}
-            </button>
-          )}
-        </div>
+            )}
+            {!pomodoro.running && (
+              <button onClick={() => { unlockAlarm(); pomodoro.setGroupId(group.id); pomodoro.start(); }}>
+                {live ? 'Resume' : pomodoro.phase === 'focus' ? 'Start my focus' : 'Start break'}
+              </button>
+            )}
+            {pomodoro.running && <button onClick={pomodoro.pause}>Pause</button>}
+            {!pomodoro.locked && pomodoro.phase === 'focus' && (
+              <button
+                className="ghost"
+                onClick={() => { unlockAlarm(); pomodoro.setGroupId(group.id); pomodoro.goTo('short', true); }}
+              >
+                {pomodoro.settings.short} min break
+              </button>
+            )}
+            {!pomodoro.locked && pomodoro.phase !== 'focus' && (
+              <button className="ghost" onClick={() => pomodoro.goTo('focus', false)}>Back to focus</button>
+            )}
+            {live && pomodoro.phase === 'focus' && (
+              <button
+                className="ghost"
+                onClick={pomodoro.finishEarly}
+                disabled={pomodoro.elapsed < 60}
+                title="Log the time you studied so far (needs at least 1 minute)"
+              >
+                Finish
+              </button>
+            )}
+            {live && <button className="ghost" onClick={pomodoro.reset}>{pomodoro.phase === 'focus' ? 'Reset' : 'Stop'}</button>}
+          </div>
+        )}
       </div>
 
       <div className="st-week-head">
@@ -292,7 +313,7 @@ function GroupRoom({ group, onLeave, notify, onStudied }) {
   );
 }
 
-export default function Groups({ notify, onStudied }) {
+export default function Groups({ notify, pomodoro }) {
   const { user } = useAuth();
   useLastSeenHeartbeat(); // better: move this call to the app-wide layout so it also runs on other pages
   const [groups, setGroups] = useState([]);
@@ -327,7 +348,7 @@ export default function Groups({ notify, onStudied }) {
       {msg && <p className="st-error">{msg}</p>}
 
       {groups.map((g) => (
-        <GroupRoom key={g.id} group={g} notify={notify} onStudied={onStudied} onLeave={(grp) => run(() => leaveGroup(grp.id, user.id))} />
+        <GroupRoom key={g.id} group={g} notify={notify} pomodoro={pomodoro} onLeave={(grp) => run(() => leaveGroup(grp.id, user.id))} />
       ))}
       {groups.length === 0 && <p className="st-muted">You're not in any group yet. Create one or paste an invite code.</p>}
     </section>

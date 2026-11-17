@@ -1,5 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
-import { saveFocusSession } from "./lib/api"; // adjust the path if this file lives elsewhere
+import { saveFocusSession, saveSession, memberStatusSet, memberStatusTouch, listMyGroups, SESSION_SAVED_EVENT } from "./lib/api"; // adjust the path if this file lives elsewhere
 import { playAlarm, unlockAlarm } from "./lib/alarm"; // adjust the path if this file lives elsewhere
 
 /* ------------------------------------------------------------------
@@ -39,6 +39,7 @@ const PHASES = {
 };
 
 export const POMODORO_STORAGE_KEY = "studytrack-pomodoro";
+export const POMODORO_GROUP_KEY = "studytrack-pomodoro-group";
 
 /* pet cat preferences + progress live in their own key so they never
    interfere with the timer settings */
@@ -155,6 +156,16 @@ export function usePomodoro({ subjects = [], onSessionComplete } = {}) {
   const [round, setRound] = useState(0); // focus sessions finished in this cycle
   const [subject, setSubject] = useState(""); // "" = General Study
   const [petEvent, setPetEvent] = useState({ type: "", id: 0 }); // lets the cat react to Skip / Reset
+  /* study group this timer is attached to ("" = just me). The group sees my status and gets my sessions. */
+  const [groupId, setGroupIdState] = useState(() => {
+    try { return localStorage.getItem(POMODORO_GROUP_KEY) || ""; } catch { return ""; }
+  });
+  const setGroupId = (id) => {
+    setGroupIdState(id);
+    try { localStorage.setItem(POMODORO_GROUP_KEY, id || ""); } catch { /* storage unavailable */ }
+  };
+  const remainingRef = useRef(0);
+  const pushedGroup = useRef("");
 
   const endRef = useRef(0);
   const baseTitle = useRef(document.title);
@@ -163,6 +174,7 @@ export function usePomodoro({ subjects = [], onSessionComplete } = {}) {
   const elapsed = total - remaining;
   const locked = running || remaining !== total; // a session is in progress
   const progress = total ? (elapsed / total) * 100 : 0;
+  remainingRef.current = remaining;
 
   /* drop a subject that was deleted */
   useEffect(() => {
@@ -197,6 +209,29 @@ export function usePomodoro({ subjects = [], onSessionComplete } = {}) {
     if (running && remaining === 0) finishPhase();
   }, [remaining, running]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* publish my status to the attached study group (the group board reads this) */
+  useEffect(() => {
+    const prev = pushedGroup.current;
+    if (prev && prev !== groupId) memberStatusSet(prev, "idle", false, 0, 0).catch(() => {});
+    pushedGroup.current = groupId;
+    if (!groupId) return;
+    const state = !locked ? "idle" : phase === "focus" ? "focus" : "break";
+    memberStatusSet(
+      groupId,
+      state,
+      locked && !running,
+      state === "idle" ? 0 : remainingRef.current,
+      total,
+    ).catch(console.error);
+  }, [groupId, running, locked, phase, total]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* heartbeat so the group doesn't mark me stale while I'm studying */
+  useEffect(() => {
+    if (!groupId || !locked) return undefined;
+    const id = setInterval(() => memberStatusTouch(groupId).catch(() => {}), 45000);
+    return () => clearInterval(id);
+  }, [groupId, locked]);
+
   /* countdown in the browser tab */
   useEffect(() => {
     const base = baseTitle.current;
@@ -218,12 +253,25 @@ export function usePomodoro({ subjects = [], onSessionComplete } = {}) {
     }
   }
 
+  /* with a group attached the time counts on the group board (and in my own stats); otherwise personal only */
+  function logSession(secs) {
+    if (groupId) {
+      if (secs < 60) return; // under a minute does not count for a group
+      const endedAt = Date.now();
+      saveSession({ startedAt: endedAt - secs * 1000, endedAt, groupId })
+        .then(() => window.dispatchEvent(new Event(SESSION_SAVED_EVENT)))
+        .catch(console.error);
+    } else {
+      saveFocusSession({ subject, seconds: secs }).catch(console.error); // backend
+    }
+  }
+
   function finishPhase() {
     if (settings.sound) playAlarm();
 
     if (phase === "focus") {
       onSessionComplete?.({ subject, minutes: settings.focus });
-      saveFocusSession({ subject, seconds: settings.focus * 60 }).catch(console.error); // backend
+      logSession(settings.focus * 60);
       updatePetStore((c) => addStudy(c, settings.focus * 60));
       const done = round + 1;
       if (done >= settings.rounds) {
@@ -268,7 +316,7 @@ export function usePomodoro({ subjects = [], onSessionComplete } = {}) {
       minutes: Math.max(1, Math.round(elapsed / 60)),
       partial: true,
     });
-    saveFocusSession({ subject, seconds: elapsed }).catch(console.error); // backend
+    logSession(elapsed);
     updatePetStore((c) => addStudy(c, elapsed));
     setRunning(false);
     setRemaining(total);
@@ -307,7 +355,7 @@ export function usePomodoro({ subjects = [], onSessionComplete } = {}) {
     )?.[0] || "custom";
 
   return {
-    settings, phase, remaining, running, round, subject, setSubject, petEvent,
+    settings, phase, remaining, running, round, subject, setSubject, petEvent, groupId, setGroupId,
     total, elapsed, locked, progress, activePreset,
     goTo, start, pause, reset, skip, finishEarly,
     applyPreset, update, applySettings, resetAll,
@@ -1262,6 +1310,22 @@ export default function PomodoroTimer({ pomodoro: p, subjects = [], sessionsToda
   const { settings, phase, remaining, running, round, locked } = p;
   const paused = locked && !running;
 
+  /* study groups this timer can be attached to */
+  const [groups, setGroups] = useState([]);
+  useEffect(() => {
+    listMyGroups()
+      .then((list) => {
+        setGroups(list);
+        // first time only: attach to the first group so the group sees you studying
+        let saved = null;
+        try { saved = localStorage.getItem(POMODORO_GROUP_KEY); } catch { /* ignore */ }
+        if (saved === null && list.length) p.setGroupId(list[0].id);
+        // the saved group was left/deleted
+        else if (saved && !list.some((g) => g.id === saved)) p.setGroupId("");
+      })
+      .catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   /* pet cat: saved preferences + progress */
   const [pet, setPet] = useState(loadPet);
   useEffect(() => {
@@ -1363,6 +1427,25 @@ export default function PomodoroTimer({ pomodoro: p, subjects = [], sessionsToda
             {subjects.map((s) => (
               <option key={s.id ?? s.name} value={s.name}>
                 {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {groups.length > 0 && (
+        <div className="focus-subject">
+          <select
+            value={p.groupId}
+            onChange={(e) => p.setGroupId(e.target.value)}
+            disabled={locked}
+            aria-label="Study with group"
+            title={locked ? "Reset the timer to change group" : "The group sees your status and gets your study time"}
+          >
+            <option value="">Just me</option>
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                👥 {g.name}
               </option>
             ))}
           </select>

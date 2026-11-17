@@ -2477,15 +2477,9 @@ function App() {
           {page === "statistics" && Statistics()}
           {page === "leaderboard" && <Leaderboard />}
           {page === "friends" && <Friends />}
-          {page === "groups" && <Groups
-              notify={chatNotify}
-              onStudied={(secs) =>
-                logFocusSession({
-                  subject: "Study Group",
-                  minutes: Math.max(1, Math.round(secs / 60)),
-                })
-              }
-            />}
+          {page === "groups" && (
+  <Groups notify={chatNotify} pomodoro={pomodoro} />
+)}
           {page === "settings" && Settings()}
         </div>
       </main>
