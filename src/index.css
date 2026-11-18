@@ -2135,7 +2135,7 @@ body {
 /* =========================================================
    POMODORO TIMER
    ========================================================= */
-.pomo { display: flex; flex-direction: column; gap: 18px; min-width: 0; --pomo-color: var(--accent); }
+.pomo { display: flex; flex-direction: column; gap: 12px; min-width: 0; --pomo-color: var(--accent); }
 .pomo[data-phase="short"] { --pomo-color: var(--green); }
 .pomo[data-phase="long"] { --pomo-color: var(--amber); }
 
@@ -2167,9 +2167,9 @@ body {
 
 /* Ring */
 .pomo-ring {
-  width: min(260px, 72vw);
+  width: min(240px, 72vw);
   aspect-ratio: 1;
-  margin: 4px auto 0;
+  margin: 0 auto;
   display: grid;
   place-items: center;
   border-radius: 50%;
@@ -2201,8 +2201,12 @@ body {
 .pomo-dot.done { background: var(--accent); border-color: var(--accent); }
 .pomo-dots small { margin-left: 6px; color: var(--faint); font-size: 12px; }
 
-.pomo .focus-subject { margin-top: 0; }
-.pomo .focus-subject select { width: min(100%, 260px); }
+.pomo .focus-subject { margin-top: 0; flex: 1 1 0; min-width: 0; }
+.pomo .focus-subject select { width: 100%; min-width: 0; }
+
+/* Subject + group dropdowns share one row */
+.pomo-selects { display: flex; justify-content: center; gap: 10px; width: min(100%, 520px); align-self: center; }
+@media (max-width: 480px) { .pomo-selects { flex-direction: column; } }
 
 .pomo .focus-controls { flex-wrap: wrap; margin-top: 0; }
 .pomo .focus-controls button { min-width: 100px; }
@@ -2263,7 +2267,7 @@ body {
 
 /* the cat sits above the card edge, so the card must not clip it
    (the gradient background still follows the rounded corners) */
-.focus-card.pomo { overflow: visible; }
+.focus-card.pomo { overflow: visible; padding: 20px 26px; }
 
 .cat-track {
   --cat-w: 100px;

@@ -1415,6 +1415,7 @@ export default function PomodoroTimer({ pomodoro: p, subjects = [], sessionsToda
         </small>
       </div>
 
+      <div className="pomo-selects">
       {phase === "focus" && (
         <div className="focus-subject">
           <select
@@ -1451,6 +1452,7 @@ export default function PomodoroTimer({ pomodoro: p, subjects = [], sessionsToda
           </select>
         </div>
       )}
+      </div>
 
       <div className="focus-controls">
         {running ? (
