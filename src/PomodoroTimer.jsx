@@ -146,15 +146,57 @@ function beep() {
    Hook
 ================================================================ */
 
+const RUN_KEY = "studytrack-pomodoro-run";
+
+/* read the timer that was running before the page was refreshed */
+function restoreRun() {
+  const settings = loadSettings();
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem(RUN_KEY)); } catch { /* ignore */ }
+  if (!s || !PHASES[s.phase]) return null;
+
+  const base = {
+    phase: s.phase,
+    round: Number(s.round) || 0,
+    subject: s.subject || "",
+    running: false,
+    remaining: settings[s.phase] * 60,
+    endsAt: 0,
+    finished: null,
+  };
+
+  if (s.running) {
+    const left = Math.ceil((s.endsAt - Date.now()) / 1000);
+    if (left > 0) return { ...base, running: true, remaining: left, endsAt: s.endsAt };
+
+    /* it ran out while the page was closed */
+    if (s.phase !== "focus") return { ...base, phase: "focus", remaining: settings.focus * 60 };
+    const done = base.round + 1;
+    const cycleEnd = done >= settings.rounds;
+    const next = cycleEnd ? "long" : "short";
+    return {
+      ...base,
+      phase: next,
+      round: cycleEnd ? 0 : done,
+      remaining: settings[next] * 60,
+      finished: { secs: Number(s.total) || settings.focus * 60, endedAt: s.endsAt },
+    };
+  }
+
+  if (s.locked) return { ...base, remaining: Math.max(1, Number(s.remaining) || base.remaining) }; // paused
+  return base;
+}
+
 export function usePomodoro({ subjects = [], onSessionComplete } = {}) {
   const subjectNames = subjects.map((s) => (typeof s === "string" ? s : s.name));
 
   const [settings, setSettings] = useState(loadSettings);
-  const [phase, setPhase] = useState("focus");
-  const [remaining, setRemaining] = useState(() => loadSettings().focus * 60);
-  const [running, setRunning] = useState(false);
-  const [round, setRound] = useState(0); // focus sessions finished in this cycle
-  const [subject, setSubject] = useState(""); // "" = General Study
+  const [restored] = useState(restoreRun); // timer saved before a refresh (or null)
+  const [phase, setPhase] = useState(restored?.phase ?? "focus");
+  const [remaining, setRemaining] = useState(() => restored?.remaining ?? loadSettings().focus * 60);
+  const [running, setRunning] = useState(restored?.running ?? false);
+  const [round, setRound] = useState(restored?.round ?? 0); // focus sessions finished in this cycle
+  const [subject, setSubject] = useState(restored?.subject ?? ""); // "" = General Study
   const [petEvent, setPetEvent] = useState({ type: "", id: 0 }); // lets the cat react to Skip / Reset
   /* study group this timer is attached to ("" = just me). The group sees my status and gets my sessions. */
   const [groupId, setGroupIdState] = useState(() => {
@@ -167,7 +209,9 @@ export function usePomodoro({ subjects = [], onSessionComplete } = {}) {
   const remainingRef = useRef(0);
   const pushedGroup = useRef("");
 
-  const endRef = useRef(0);
+  const endRef = useRef(restored?.endsAt || 0);
+  const handledRef = useRef(false);
+  const prevTotal = useRef(0);
   const baseTitle = useRef(document.title);
 
   const total = settings[phase] * 60;
@@ -190,8 +234,41 @@ export function usePomodoro({ subjects = [], onSessionComplete } = {}) {
     }
   }, [settings]);
 
+  /* remember the running timer so a refresh doesn't lose it */
+  useEffect(() => {
+    try {
+      localStorage.setItem(RUN_KEY, JSON.stringify({
+        phase, round, subject, running, locked, total,
+        endsAt: running ? endRef.current : 0,
+        remaining: running ? 0 : remaining,
+      }));
+    } catch {
+      /* storage unavailable */
+    }
+  }, [phase, round, subject, running, locked, total, remaining]);
+
+  /* a focus run that ended while the page was closed still counts */
+  useEffect(() => {
+    const f = restored?.finished;
+    if (!f || handledRef.current) return;
+    handledRef.current = true;
+    onSessionComplete?.({ subject: restored.subject, minutes: Math.round(f.secs / 60) });
+    updatePetStore((c) => addStudy(c, f.secs));
+    saveSession({
+      startedAt: f.endedAt - f.secs * 1000,
+      endedAt: f.endedAt,
+      subject: restored.subject || null,
+      groupId: groupId || null,
+    })
+      .then(() => window.dispatchEvent(new Event(SESSION_SAVED_EVENT)))
+      .catch(console.error);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   /* an untouched timer follows the selected length */
   useEffect(() => {
+    if (prevTotal.current === 0) { prevTotal.current = total; return; } // first render: keep restored time
+    if (prevTotal.current === total) return;
+    prevTotal.current = total;
     if (!running) setRemaining(total);
   }, [total]); // eslint-disable-line react-hooks/exhaustive-deps
 
