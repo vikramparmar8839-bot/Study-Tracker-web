@@ -486,60 +486,28 @@ function NumberField({ label, value, range, suffix, disabled, onChange }) {
 ================================================================ */
 
 /* every reward unlocks by total hours of focus time studied together (`at` = hours).
-   kind: outfit | coat | behavior | extra | title */
+   kind: outfit | coat | behavior | extra */
 const REWARDS = [
   { key: "bow", kind: "outfit", label: "bow tie", emoji: "🎀", at: 1 },
-  { key: "t_kitten", kind: "title", label: "Curious Kitten", emoji: "🐱", at: 1 },
   { key: "glasses", kind: "outfit", label: "glasses", emoji: "🕶️", at: 5 },
-  { key: "t_napper", kind: "title", label: "Cozy Napper", emoji: "😴", at: 5 },
   { key: "toy", kind: "behavior", label: "toy mouse to chase on breaks", short: "toy mouse", emoji: "🐭", at: 8 },
   { key: "scarf", kind: "outfit", label: "cozy scarf", emoji: "🧣", at: 10 },
-  { key: "t_tabby", kind: "title", label: "Focused Tabby", emoji: "🐯", at: 10 },
   { key: "c_black", kind: "coat", coat: "black", label: "Black coat", emoji: "🖤", at: 12 },
   { key: "c_calico", kind: "coat", coat: "calico", label: "Calico coat", emoji: "🧡", at: 15 },
   { key: "crown", kind: "outfit", head: true, label: "crown", emoji: "👑", at: 20 },
-  { key: "t_study", kind: "title", label: "Study Cat", emoji: "📚", at: 25 },
   { key: "desk", kind: "extra", label: "cozy desk & plant scene", emoji: "🪴", at: 30 },
   { key: "gradcap", kind: "outfit", head: true, label: "graduation cap", emoji: "🎓", at: 35 },
   { key: "c_tiger", kind: "coat", coat: "tiger", label: "Tiger coat", emoji: "🐅", at: 40 },
   { key: "wizard", kind: "outfit", head: true, label: "wizard hat & wand", emoji: "🧙", at: 50 },
-  { key: "t_wise", kind: "title", label: "Wise Whiskers", emoji: "🦉", at: 50 },
   { key: "book", kind: "behavior", label: "naps on a book during breaks", emoji: "📖", at: 60 },
   { key: "cape", kind: "outfit", label: "hero cape", emoji: "🦸", at: 75 },
   { key: "halo", kind: "outfit", head: true, label: "golden halo", emoji: "😇", at: 100 },
-  { key: "t_lion", kind: "title", label: "Legendary Lion", emoji: "🦁", at: 100 },
   { key: "c_galaxy", kind: "coat", coat: "galaxy", label: "Galaxy coat", emoji: "🌌", at: 120 },
   { key: "aura", kind: "extra", label: "glowing aura", emoji: "✨", at: 150 },
   { key: "companion", kind: "extra", label: "kitten companion", emoji: "🐈", at: 200 },
 ];
-const KIND_WORD = { outfit: "outfit", coat: "coat", behavior: "trick", extra: "extra", title: "title" };
-const STREAK_BADGE = { label: "Paw-fect Week", emoji: "🔥", days: 7 };
 
 const coatAt = (key) => REWARDS.find((r) => r.coat === key)?.at ?? 0;
-const titleFor = (h) => [...REWARDS].filter((r) => r.kind === "title" && h >= r.at).pop() || null;
-const fmtLeft = (h) => (h < 1 ? `${Math.max(1, Math.ceil(h * 60))} min` : fmtHours(h));
-
-/* the next unlock(s): everything that unlocks at the nearest upcoming hour mark */
-function nextGoal(h) {
-  const next = REWARDS.filter((r) => r.at > h);
-  if (!next.length) return null;
-  const at = Math.min(...next.map((r) => r.at));
-  return { at, items: next.filter((r) => r.at === at) };
-}
-const goalNames = (g) => g.items.map((r) => `${r.emoji} ${r.label}`).join(" + ");
-/* compact line: "🎓 Next: graduation cap · 3.5h to go" */
-function goalText(h) {
-  const g = nextGoal(h);
-  if (!g) return "You unlocked everything! 🏆 Legendary study buddy!";
-  const emojis = g.items.map((r) => r.emoji).join(" ");
-  const names = g.items.map((r) => r.short || r.label).join(" + ");
-  return `${emojis} Next: ${names} · ${fmtLeft(g.at - h)} to go`;
-}
-/* short line: "🎓 graduation cap in 3.5h" */
-function goalShort(h) {
-  const g = nextGoal(h);
-  return g ? `${goalNames(g)} in ${fmtLeft(g.at - h)}` : "";
-}
 
 const COATS = {
   persian: { label: "Persian", swatch: "#9ba6bd", body: "#9ba6bd", light: "#cdd4e0", ink: "#5b6478", eye: "#1b1b22", iris: "#f0932b", ear: "#e3a9b4" },
@@ -684,7 +652,6 @@ function PetCat({ state, mood, paused, busy, phase, round, rounds, sessionsToday
   const prevTotal = useRef(hours);
   const eventSeen = useRef(0);
   const nudgeSeen = useRef(pet.nudge?.id || 0);
-  const lastUnlockAt = useRef(0);
   const hoursRef = useRef(hours);
   const clickCount = useRef(0);
   const lastClick = useRef(0);
@@ -721,10 +688,9 @@ function PetCat({ state, mood, paused, busy, phase, round, rounds, sessionsToday
   }, []);
 
   const lineFor = () => {
-    if (state === "focus") return pickLine([...NAP_LINES, goalText(hoursRef.current)], lastLine);
+    if (state === "focus") return pickLine(NAP_LINES, lastLine);
     if (state === "wake") return pickLine(WAKE_LINES, lastLine);
     const pool = [...CAT_LINES[mood]];
-    pool.push(goalText(hoursRef.current), goalText(hoursRef.current)); // show the next goal often
     if (night) pool.push(...NIGHT_LINES);
     if (phase === "focus" && round > 0 && round < rounds) {
       const left = rounds - round;
@@ -800,9 +766,8 @@ function PetCat({ state, mood, paused, busy, phase, round, rounds, sessionsToday
     const id = setTimeout(() => {
       if (catGreeted) return;
       catGreeted = true;
-      const goal = goalShort(hoursRef.current);
       const hello = sessionsToday === 0 ? "Hi! I'm {name}. Ready to study? 📚" : "Welcome back! 💕";
-      say(goal ? `${hello} Next unlock: ${goal}` : hello, 6000);
+      say(hello, 6000);
     }, 1200);
     return () => clearTimeout(id);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -831,28 +796,18 @@ function PetCat({ state, mood, paused, busy, phase, round, rounds, sessionsToday
       say(pickLine(DONE_LINES, lastLine), 4500);
       clearTimeout(celebrateTimer.current);
       celebrateTimer.current = setTimeout(() => setCelebrating(0), 2400);
-      /* after the cheer, tell the person how far the next unlock is */
-      setTimeout(() => {
-        if (Date.now() - lastUnlockAt.current < 9000) return; // an unlock message already said it
-        say(goalText(hoursRef.current), 6000);
-      }, 4700);
     }
   }, [sessionsToday, say]);
 
-  /* something new was unlocked -> announce it and point at the next goal */
+  /* something new was unlocked -> announce it (the surprise moment) */
   useEffect(() => {
     const prev = prevTotal.current;
     prevTotal.current = hours;
     if (hours <= prev) return undefined;
     const fresh = REWARDS.filter((r) => prev < r.at && hours >= r.at);
     if (!fresh.length) return undefined;
-    lastUnlockAt.current = Date.now();
-    const names = fresh.map((r) => `${r.emoji} ${KIND_WORD[r.kind] === "title" ? `title "${r.label}"` : r.label}`).join(" + ");
-    const goal = goalShort(hours);
-    const id = setTimeout(
-      () => say(`🎉 Unlocked: ${names}!${goal ? ` Next: ${goal}` : " That's everything! 🏆"}`, 8000),
-      2800
-    );
+    const names = fresh.map((r) => `${r.emoji} ${r.label}`).join(" + ");
+    const id = setTimeout(() => say(`🎉 Unlocked: ${names}!`, 8000), 2800);
     return () => clearTimeout(id);
   }, [hours]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -885,8 +840,7 @@ function PetCat({ state, mood, paused, busy, phase, round, rounds, sessionsToday
     if (prev === state) return;
     if (Date.now() - celebratedAt.current < 1500) return; // the celebration wins
     if (state === "focus") {
-      const goal = goalShort(hoursRef.current);
-      say(goal ? `Shh… focus time 🤫 Next unlock: ${goal}` : "Shh… focus time 🤫", 5000);
+      say("Shh… focus time 🤫", 5000);
     }
     else if (state === "wake") say("Almost there! One last minute ✨", 3500);
     else if (state === "break") {
@@ -1413,15 +1367,8 @@ export default function PomodoroTimer({ pomodoro: p, subjects = [], sessionsToda
   const changePet = (patch) => setPet(updatePetStore(patch));
   const petName = (pet.name || "").trim() || PET_DEFAULTS.name;
   const petHrs = petHours(pet);
-  const goal = nextGoal(petHrs);
-  const prevAt = Math.max(0, ...REWARDS.filter((r) => r.at <= petHrs).map((r) => r.at));
-  const goalPct = goal ? Math.min(100, Math.round(((petHrs - prevAt) / (goal.at - prevAt)) * 100)) : 100;
-  const petTitle = titleFor(petHrs);
-  const petProgress =
-    `${petName} has studied with you for ${fmtHours(petHrs)}` +
-    (petTitle ? ` · title: ${petTitle.emoji} ${petTitle.label}` : "") +
-    ` · ${goalText(petHrs)}`;
-  const heads = REWARDS.filter((r) => r.head);
+  const petProgress = `${petName} has studied with you for ${fmtHours(petHrs)}`;
+  const heads = REWARDS.filter((r) => r.head && petHrs >= r.at); // locked hats stay secret
 
   /* the cat naps while you focus, but wakes for the last minute */
   const nearEnd = running && phase === "focus" && remaining > 0 && remaining <= 60 && p.total > 120;
@@ -1652,23 +1599,20 @@ export default function PomodoroTimer({ pomodoro: p, subjects = [], sessionsToda
             <div className="pomo-field">
               <span>Coat</span>
               <div className="pomo-coats" role="group" aria-label="Coat colour">
-                {Object.entries(COATS).map(([key, coat]) => {
-                  const at = coatAt(key);
-                  const locked = petHrs < at;
-                  const lockMsg = `🔒 ${coat.label} coat unlocks at ${at}h — study ${fmtLeft(at - petHrs)} more!`;
-                  return (
+                {Object.entries(COATS)
+                  .filter(([key]) => petHrs >= coatAt(key)) // locked coats stay secret
+                  .map(([key, coat]) => (
                     <button
                       key={key}
                       type="button"
                       className={pet.coat === key ? "pomo-coat active" : "pomo-coat"}
-                      style={locked ? { "--coat": coat.swatch, opacity: 0.35, cursor: "not-allowed" } : { "--coat": coat.swatch }}
-                      aria-label={locked ? `${coat.label} (locked until ${at} hours)` : coat.label}
+                      style={{ "--coat": coat.swatch }}
+                      aria-label={coat.label}
                       aria-pressed={pet.coat === key}
-                      title={locked ? lockMsg : coat.label}
-                      onClick={() => (locked ? changePet({ nudge: { text: lockMsg, id: Date.now() } }) : changePet({ coat: key }))}
+                      title={coat.label}
+                      onClick={() => changePet({ coat: key })}
                     />
-                  );
-                })}
+                  ))}
               </div>
             </div>
           </div>
@@ -1680,8 +1624,8 @@ export default function PomodoroTimer({ pomodoro: p, subjects = [], sessionsToda
                 <option value="auto">Auto (best unlocked)</option>
                 <option value="none">No hat</option>
                 {heads.map((r) => (
-                  <option key={r.key} value={r.key} disabled={petHrs < r.at}>
-                    {r.emoji} {r.label}{petHrs < r.at ? ` — 🔒 ${r.at}h` : ""}
+                  <option key={r.key} value={r.key}>
+                    {r.emoji} {r.label}
                   </option>
                 ))}
               </select>
@@ -1689,36 +1633,6 @@ export default function PomodoroTimer({ pomodoro: p, subjects = [], sessionsToda
           </label>
 
           <p className="pomo-note">{petProgress}</p>
-          {goal && (
-            <div aria-hidden="true" style={{ height: 6, borderRadius: 99, background: "rgba(127,127,127,.25)", overflow: "hidden", margin: "6px 0 10px" }}>
-              <div style={{ width: `${goalPct}%`, height: "100%", background: "#f59e0b" }} />
-            </div>
-          )}
-
-          <h4 style={{ margin: "10px 0 4px", fontSize: 13 }}>Rewards ({fmtHours(petHrs)} studied)</h4>
-          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 4, fontSize: 13 }}>
-            {REWARDS.map((r) => {
-              const done = petHrs >= r.at;
-              return (
-                <li key={r.key} style={{ display: "flex", justifyContent: "space-between", gap: 8, opacity: done ? 1 : 0.7 }}>
-                  <span>
-                    {done ? "✅" : "🔒"} {r.emoji} {r.label} <small>({KIND_WORD[r.kind]})</small>
-                  </span>
-                  <span>{done ? "unlocked" : `${r.at}h · ${fmtLeft(r.at - petHrs)} to go`}</span>
-                </li>
-              );
-            })}
-            <li style={{ display: "flex", justifyContent: "space-between", gap: 8, opacity: (Number(pet.bestStreak) || 0) >= STREAK_BADGE.days ? 1 : 0.7 }}>
-              <span>
-                {(Number(pet.bestStreak) || 0) >= STREAK_BADGE.days ? "✅" : "🔒"} {STREAK_BADGE.emoji} {STREAK_BADGE.label} <small>(badge)</small>
-              </span>
-              <span>
-                {(Number(pet.bestStreak) || 0) >= STREAK_BADGE.days
-                  ? "earned"
-                  : `${STREAK_BADGE.days}-day streak · now ${Number(pet.streak) || 0}`}
-              </span>
-            </li>
-          </ul>
         </div>
       </details>
     </section>
