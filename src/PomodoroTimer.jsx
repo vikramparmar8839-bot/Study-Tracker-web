@@ -1,5 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
-import { saveFocusSession, saveSession, memberStatusSet, memberStatusTouch, listMyGroups, SESSION_SAVED_EVENT } from "./lib/api"; // adjust the path if this file lives elsewhere
+import { saveFocusSession, saveSession, memberStatusSet, listMyGroups, SESSION_SAVED_EVENT } from "./lib/api"; // adjust the path if this file lives elsewhere
 import { playAlarm, unlockAlarm } from "./lib/alarm"; // adjust the path if this file lives elsewhere
 
 /* ------------------------------------------------------------------
@@ -207,7 +207,6 @@ export function usePomodoro({ subjects = [], onSessionComplete } = {}) {
     try { localStorage.setItem(POMODORO_GROUP_KEY, id || ""); } catch { /* storage unavailable */ }
   };
   const remainingRef = useRef(0);
-  const pushedGroup = useRef("");
 
   const endRef = useRef(restored?.endsAt || 0);
   const handledRef = useRef(false);
@@ -286,28 +285,38 @@ export function usePomodoro({ subjects = [], onSessionComplete } = {}) {
     if (running && remaining === 0) finishPhase();
   }, [remaining, running]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* publish my status to the attached study group (the group board reads this) */
-  useEffect(() => {
-    const prev = pushedGroup.current;
-    if (prev && prev !== groupId) memberStatusSet(prev, "idle", false, 0, 0).catch(() => {});
-    pushedGroup.current = groupId;
-    if (!groupId) return;
-    const state = !locked ? "idle" : phase === "focus" ? "focus" : "break";
-    memberStatusSet(
-      groupId,
-      state,
-      locked && !running,
-      state === "idle" ? 0 : remainingRef.current,
-      total,
-    ).catch(console.error);
-  }, [groupId, running, locked, phase, total]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* publish my status to ALL my study groups (each group board reads this).
+     Which group the dropdown picks only decides where the study TIME is counted. */
+  const statusRef = useRef(null);
+  const pushStatusToAllGroups = () => {
+    const a = statusRef.current;
+    if (!a) return;
+    listMyGroups()
+      .then((list) =>
+        Promise.all(
+          list.map((g) =>
+            memberStatusSet(g.id, a.state, a.paused, a.state === "idle" ? 0 : remainingRef.current, a.total).catch(() => {}),
+          ),
+        ),
+      )
+      .catch(() => {});
+  };
 
-  /* heartbeat so the group doesn't mark me stale while I'm studying */
   useEffect(() => {
-    if (!groupId || !locked) return undefined;
-    const id = setInterval(() => memberStatusTouch(groupId).catch(() => {}), 45000);
+    statusRef.current = {
+      state: !locked ? "idle" : phase === "focus" ? "focus" : "break",
+      paused: locked && !running,
+      total,
+    };
+    pushStatusToAllGroups();
+  }, [running, locked, phase, total]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* heartbeat: keeps me from going stale, and also covers groups I join mid-session */
+  useEffect(() => {
+    if (!locked) return undefined;
+    const id = setInterval(pushStatusToAllGroups, 45000);
     return () => clearInterval(id);
-  }, [groupId, locked]);
+  }, [locked]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* countdown in the browser tab */
   useEffect(() => {
@@ -1465,7 +1474,7 @@ export default function PomodoroTimer({ pomodoro: p, subjects = [], sessionsToda
             onChange={(e) => p.setGroupId(e.target.value)}
             disabled={locked}
             aria-label="Study with group"
-            title={locked ? "Reset the timer to change group" : "The group sees your status and gets your study time"}
+            title={locked ? "Reset the timer to change group" : "Your status shows in all your groups; study time is counted for this one"}
           >
             <option value="">Just me</option>
             {groups.map((g) => (

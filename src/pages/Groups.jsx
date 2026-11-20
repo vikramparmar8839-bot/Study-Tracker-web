@@ -163,8 +163,8 @@ function GroupRoom({ group, onLeave, notify, pomodoro }) {
 
   // MY timer is the same Pomodoro timer as on the Dashboard; it just gets attached to this group
   const attached = pomodoro.groupId === group.id;
-  const live = attached && pomodoro.locked;
-  const busyElsewhere = pomodoro.locked && !attached;
+  const live = pomodoro.locked; // my status is broadcast to every group, so it is live in all of them
+  const busyElsewhere = pomodoro.locked && !attached; // controls stay with the group that counts the time
 
   // refresh the board as soon as my session is saved
   useEffect(() => {
@@ -194,7 +194,7 @@ function GroupRoom({ group, onLeave, notify, pomodoro }) {
     : { state: 'idle' };
 
   const stateLabel =
-    busyElsewhere ? 'Your timer is running for another group (or just you)'
+    busyElsewhere ? 'Your timer is running (controls are in the group it counts for)'
     : !live ? 'Ready'
     : !pomodoro.running ? 'Paused'
     : pomodoro.phase === 'focus' ? 'Focus' : 'Break';
