@@ -3,8 +3,8 @@ import { supabase } from '../lib/supabaseClient';
 
 /* ---------- write side: tell the server "I'm here", rarely ---------- */
 
-const SEND_GAP_MS = 5 * 60 * 1000;   // never send more than once per 5 min (server also enforces this)
-const BEAT_EVERY_MS = 10 * 60 * 1000; // while the tab is open and visible
+const SEND_GAP_MS = 50 * 1000;       // never send more than once per 50s (the server function must allow this too)
+const BEAT_EVERY_MS = 60 * 1000;      // while the tab is open and visible
 let lastSent = 0;                     // shared by every caller, so double-mounting costs nothing
 
 async function touch() {
@@ -16,7 +16,7 @@ async function touch() {
 
 /**
  * Call ONCE in the always-mounted signed-in layout (same place `notify` is created).
- * Writes: on open, when you come back to the tab, when you leave it, and every 10 min while visible.
+ * Writes: on open, when you come back to the tab, when you leave it, and every 60s while visible.
  */
 export function useLastSeenHeartbeat() {
   useEffect(() => {
@@ -34,7 +34,7 @@ export function useLastSeenHeartbeat() {
 
 /**
  * const seen = useLastSeen(userIds);  ->  { [userId]: ISO timestamp }
- * Loads once, then re-checks every 2 min, and only while the tab is visible.
+ * Loads once, then re-checks every 60s, and only while the tab is visible.
  */
 export function useLastSeen(userIds) {
   const [map, setMap] = useState({});
@@ -52,7 +52,7 @@ export function useLastSeen(userIds) {
       if (active && data) setMap(Object.fromEntries(data.map((r) => [r.user_id, r.last_seen_at])));
     };
     load();
-    const id = setInterval(load, 120_000);
+    const id = setInterval(load, 60_000);
     return () => { active = false; clearInterval(id); };
   }, [key]);
 
@@ -61,11 +61,14 @@ export function useLastSeen(userIds) {
 
 /* ---------- label helper ---------- */
 
+const ONLINE_WINDOW_MS = 150 * 1000; // online = seen in the last 2.5 min (about 2 missed beats)
+
 /** -> null (never seen) | { online: true } | { online: false, text: '3h ago' } */
 export function lastSeenInfo(iso) {
   if (!iso) return null;
-  const min = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 60000));
-  if (min < 11) return { online: true, text: 'now' }; // heartbeat is every <=10 min
+  const ms = Math.max(0, Date.now() - Date.parse(iso));
+  const min = Math.floor(ms / 60000);
+  if (ms < ONLINE_WINDOW_MS) return { online: true, text: 'now' }; // heartbeat is every 60s
   if (min < 60) return { online: false, text: `${min}m ago` };
   const h = Math.floor(min / 60);
   if (h < 24) return { online: false, text: `${h}h ago` };
