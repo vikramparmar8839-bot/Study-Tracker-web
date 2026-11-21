@@ -6,7 +6,7 @@ import { useGroupPresence } from '../hooks/useGroupPresence';
 import { fmtDuration } from './Leaderboard';
 import GroupChat from './GroupChat';
 import { useGroupChat } from '../hooks/useGroupChat';
-import { useLastSeen, useLastSeenHeartbeat, lastSeenInfo } from '../hooks/useLastSeen';
+import { useLastSeen, lastSeenInfo } from '../hooks/useLastSeen';
 import './social.css';
 import './groups-status.css';
 
@@ -315,7 +315,6 @@ function GroupRoom({ group, onLeave, notify, pomodoro }) {
 
 export default function Groups({ notify, pomodoro }) {
   const { user } = useAuth();
-  useLastSeenHeartbeat(); // better: move this call to the app-wide layout so it also runs on other pages
   const [groups, setGroups] = useState([]);
   const [name, setName] = useState('');
   const [code, setCode] = useState('');

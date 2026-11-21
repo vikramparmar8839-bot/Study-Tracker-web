@@ -12,6 +12,7 @@ import Friends from "./pages/Friends";
 import Groups from "./pages/Groups";
 import DashboardGroupCard from "./pages/DashboardGroupCard";
 import { useChatNotifications } from "./hooks/useChatNotifications";
+import { useLastSeenHeartbeat } from "./hooks/useLastSeen";
 import {
   parseSyllabus,
   extractPdfText as extractSyllabusText,
@@ -99,6 +100,7 @@ function formatStudyTime(minutes) {
 function App() {
   const { profile, signOut, updateProfile } = useAuth();
   const chatNotify = useChatNotifications();
+  useLastSeenHeartbeat(); // keeps "online" status fresh on every page, not just Groups
   const [page, setPage] = useState("dashboard");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
