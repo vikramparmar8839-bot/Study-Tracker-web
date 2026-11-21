@@ -34,7 +34,7 @@ export function useLastSeenHeartbeat() {
 
 /**
  * const seen = useLastSeen(userIds);  ->  { [userId]: ISO timestamp }
- * Loads once, then re-checks every 60s, and only while the tab is visible.
+ * Loads once, re-checks every 60s while the tab is visible, and refreshes instantly when you return to the tab.
  */
 export function useLastSeen(userIds) {
   const [map, setMap] = useState({});
@@ -43,8 +43,12 @@ export function useLastSeen(userIds) {
   useEffect(() => {
     if (!key) return undefined;
     let active = true;
+    let lastLoad = 0;
     const load = async () => {
       if (document.visibilityState !== 'visible') return;
+      const t = Date.now();
+      if (t - lastLoad < 5000) return; // focus + visibility can fire together; one query is enough
+      lastLoad = t;
       const { data } = await supabase
         .from('user_last_seen')
         .select('user_id,last_seen_at')
@@ -53,7 +57,16 @@ export function useLastSeen(userIds) {
     };
     load();
     const id = setInterval(load, 60_000);
-    return () => { active = false; clearInterval(id); };
+    // the moment you come back to this tab/window, refresh right away instead of waiting for the next tick
+    const onShow = () => { if (document.visibilityState === 'visible') load(); };
+    document.addEventListener('visibilitychange', onShow);
+    window.addEventListener('focus', onShow);
+    return () => {
+      active = false;
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onShow);
+      window.removeEventListener('focus', onShow);
+    };
   }, [key]);
 
   return map;
