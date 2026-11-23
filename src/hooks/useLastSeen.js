@@ -36,17 +36,14 @@ async function joinPresence() {
   ch
     .on('presence', { event: 'sync' }, () => {
       const next = new Set(Object.keys(ch.presenceState()));
-      console.log('[presence] sync', new Date().toISOString(), [...next]); // TEMP DEBUG
       for (const id of online) if (!next.has(id)) leftAt.set(id, Date.now());
       online.clear();
       next.forEach((id) => online.add(id));
       emit();
     })
     .subscribe((status) => {
-      console.log('[presence] status', status, new Date().toISOString()); // TEMP DEBUG
       if (status === 'SUBSCRIBED') {
-        ch.track({ here: true, at: Date.now() })
-          .then((r) => console.log('[presence] track result', r, new Date().toISOString())); // TEMP DEBUG
+        ch.track({ here: true, at: Date.now() });
       }
       if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status) && channel === ch) {
         channel = null;
@@ -58,7 +55,6 @@ async function joinPresence() {
 
 // re-announce "I'm here" (e.g. after the app comes back to the foreground)
 function retrack() {
-  console.log('[presence] retrack', new Date().toISOString(), !!channel); // TEMP DEBUG
   if (channel) channel.track({ here: true, at: Date.now() });
 }
 
