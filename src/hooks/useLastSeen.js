@@ -1,43 +1,133 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
-/* ---------- write side: tell the server "I'm here", rarely ---------- */
+/* =====================================================================
+   ONLINE / OFFLINE  ->  Supabase Realtime Presence (live, no database writes)
+   LAST SEEN         ->  still saved in the database, but only every 5 minutes
+   Same function names as before, so no other file needs to change.
+   ===================================================================== */
 
-const SEND_GAP_MS = 50 * 1000;       // never send more than once per 50s (the server function must allow this too)
-const BEAT_EVERY_MS = 60 * 1000;      // while the tab is open and visible
-let lastSent = 0;                     // shared by every caller, so double-mounting costs nothing
+/* ---------- live "who is online" (Presence) ---------- */
 
-async function touch() {
+// A far-future date: still a valid ISO string for any code that parses it,
+// and lastSeenInfo() treats it as online no matter when it renders.
+const ONLINE_STAMP = '9999-12-31T00:00:00.000Z';
+
+const online = new Set();   // ids of everyone connected right now
+const leftAt = new Map();   // id -> time (ms) when I saw them disconnect
+const listeners = new Set();
+let version = 0;
+let channel = null;
+let users = 0;              // how many places called useLastSeenHeartbeat()
+
+const emit = () => { version += 1; listeners.forEach((fn) => fn()); };
+const subscribe = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
+const getVersion = () => version;
+
+async function joinPresence() {
+  if (channel) return;
+  const { data } = await supabase.auth.getSession();
+  const myId = data.session?.user?.id;
+  if (!myId || users === 0 || channel) return;
+
+  // key = my user id, so several tabs of the same person count as one
+  const ch = supabase.channel('online-users', { config: { presence: { key: myId } } });
+  channel = ch;
+  ch
+    .on('presence', { event: 'sync' }, () => {
+      const next = new Set(Object.keys(ch.presenceState()));
+      console.log('[presence] sync', new Date().toISOString(), [...next]); // TEMP DEBUG
+      for (const id of online) if (!next.has(id)) leftAt.set(id, Date.now());
+      online.clear();
+      next.forEach((id) => online.add(id));
+      emit();
+    })
+    .subscribe((status) => {
+      console.log('[presence] status', status, new Date().toISOString()); // TEMP DEBUG
+      if (status === 'SUBSCRIBED') {
+        ch.track({ here: true, at: Date.now() })
+          .then((r) => console.log('[presence] track result', r, new Date().toISOString())); // TEMP DEBUG
+      }
+      if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status) && channel === ch) {
+        channel = null;
+        supabase.removeChannel(ch);
+        setTimeout(joinPresence, 2000); // returns early if users === 0
+      }
+    });
+}
+
+// re-announce "I'm here" (e.g. after the app comes back to the foreground)
+function retrack() {
+  console.log('[presence] retrack', new Date().toISOString(), !!channel); // TEMP DEBUG
+  if (channel) channel.track({ here: true, at: Date.now() });
+}
+
+function leavePresence() {
+  const ch = channel;
+  channel = null; // null first so the CLOSED callback doesn't rejoin
+  if (ch) supabase.removeChannel(ch);
+  online.clear();
+  emit();
+}
+
+/* ---------- write side: save "last seen" in the database, rarely ---------- */
+
+const SEND_GAP_MS = 50 * 1000;      // never more than once per 50s (the server function allows this)
+const BEAT_EVERY_MS = 5 * 60 * 1000; // while the app is open, even in a background tab
+let lastSent = 0;                    // shared by every caller, so double-mounting costs nothing
+
+async function touch(force = false) {
   const t = Date.now();
-  if (t - lastSent < SEND_GAP_MS) return;
+  if (!force && t - lastSent < SEND_GAP_MS) return;
   lastSent = t;
   try { await supabase.rpc('touch_last_seen'); } catch { /* not important */ }
 }
 
 /**
- * Call ONCE in the always-mounted signed-in layout (same place `notify` is created).
- * Writes: on open, when you come back to the tab, when you leave it, and every 60s while visible.
+ * Call in the always-mounted signed-in layout (already done in App.jsx).
+ * - joins the live Presence channel (this is what makes you show as Online)
+ * - saves "last seen" on open, every 5 min, and when the page is closed
+ * It does NOT stop when the tab is hidden, so background tabs stay Online.
  */
 export function useLastSeenHeartbeat() {
   useEffect(() => {
+    users += 1;
+    joinPresence();
     touch();
-    const onVis = () => touch(); // fires on both hide and show; the gap keeps it cheap
-    document.addEventListener('visibilitychange', onVis);
-    const id = setInterval(() => {
-      if (document.visibilityState === 'visible') touch();
-    }, BEAT_EVERY_MS);
-    return () => { document.removeEventListener('visibilitychange', onVis); clearInterval(id); };
+    const id = setInterval(() => touch(), BEAT_EVERY_MS);
+    const onLeave = () => touch(true); // best effort, the browser may cut it short
+    window.addEventListener('pagehide', onLeave);
+    const onBack = () => {
+      if (document.visibilityState !== 'visible') return;
+      joinPresence(); // rejoin if the channel was dropped
+      retrack();      // re-announce "I'm here"
+    };
+    document.addEventListener('visibilitychange', onBack);
+    window.addEventListener('focus', onBack);
+    window.addEventListener('online', onBack);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener('pagehide', onLeave);
+      document.removeEventListener('visibilitychange', onBack);
+      window.removeEventListener('focus', onBack);
+      window.removeEventListener('online', onBack);
+      users -= 1;
+      if (users === 0) leavePresence();
+    };
   }, []);
 }
 
-/* ---------- read side: one small query, no realtime ---------- */
+/* ---------- read side ---------- */
 
 /**
  * const seen = useLastSeen(userIds);  ->  { [userId]: ISO timestamp }
- * Loads once, re-checks every 60s while the tab is visible, and refreshes instantly when you return to the tab.
+ * People connected right now get a fixed "online" marker.
+ * Everyone else gets their saved last seen time (or the moment I saw them leave, if newer).
  */
 export function useLastSeen(userIds) {
-  const [map, setMap] = useState({});
+  useSyncExternalStore(subscribe, getVersion); // re-render the moment someone joins or leaves
+  const [saved, setSaved] = useState({});
+  const [, setTick] = useState(0);
   const key = [...userIds].sort().join(',');
 
   useEffect(() => {
@@ -47,41 +137,52 @@ export function useLastSeen(userIds) {
     const load = async () => {
       if (document.visibilityState !== 'visible') return;
       const t = Date.now();
-      if (t - lastLoad < 5000) return; // focus + visibility can fire together; one query is enough
+      if (t - lastLoad < 5000) return;
       lastLoad = t;
       const { data } = await supabase
         .from('user_last_seen')
         .select('user_id,last_seen_at')
         .in('user_id', key.split(','));
-      if (active && data) setMap(Object.fromEntries(data.map((r) => [r.user_id, r.last_seen_at])));
+      if (active && data) setSaved(Object.fromEntries(data.map((r) => [r.user_id, r.last_seen_at])));
     };
     load();
-    const id = setInterval(load, 60_000);
-    // the moment you come back to this tab/window, refresh right away instead of waiting for the next tick
+    const reload = setInterval(load, BEAT_EVERY_MS);
+    const tick = setInterval(() => setTick((n) => n + 1), 60_000); // keeps "5m ago" text moving
     const onShow = () => { if (document.visibilityState === 'visible') load(); };
     document.addEventListener('visibilitychange', onShow);
     window.addEventListener('focus', onShow);
     return () => {
       active = false;
-      clearInterval(id);
+      clearInterval(reload);
+      clearInterval(tick);
       document.removeEventListener('visibilitychange', onShow);
       window.removeEventListener('focus', onShow);
     };
   }, [key]);
 
-  return map;
+  const out = {};
+  for (const id of userIds) {
+    if (online.has(id)) {
+      out[id] = ONLINE_STAMP; // fixed "online right now" marker, never goes stale between renders
+    } else {
+      const best = Math.max(saved[id] ? Date.parse(saved[id]) : 0, leftAt.get(id) || 0);
+      if (best) out[id] = new Date(best).toISOString();
+    }
+  }
+  return out;
 }
 
 /* ---------- label helper ---------- */
 
-const ONLINE_WINDOW_MS = 150 * 1000; // online = seen in the last 2.5 min (about 2 missed beats)
+const ONLINE_WINDOW_MS = 5 * 1000;
 
 /** -> null (never seen) | { online: true } | { online: false, text: '3h ago' } */
 export function lastSeenInfo(iso) {
   if (!iso) return null;
+  if (iso === ONLINE_STAMP) return { online: true, text: 'now' };
   const ms = Math.max(0, Date.now() - Date.parse(iso));
   const min = Math.floor(ms / 60000);
-  if (ms < ONLINE_WINDOW_MS) return { online: true, text: 'now' }; // heartbeat is every 60s
+  if (ms < ONLINE_WINDOW_MS) return { online: true, text: 'now' };
   if (min < 60) return { online: false, text: `${min}m ago` };
   const h = Math.floor(min / 60);
   if (h < 24) return { online: false, text: `${h}h ago` };
