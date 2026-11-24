@@ -14,6 +14,7 @@ import DashboardGroupCard from "./pages/DashboardGroupCard";
 import { useChatNotifications } from "./hooks/useChatNotifications";
 import { useLastSeenHeartbeat } from "./hooks/useLastSeen";
 import { NudgeHost } from "./pages/Nudge";
+import PushToggle from "./pages/PushToggle";
 import {
   parseSyllabus,
   extractPdfText as extractSyllabusText,
@@ -1873,6 +1874,8 @@ function App() {
             </p>
           </div>
 
+           <PushToggle />
+           
           <div className="panel">
             <div className="panel-header">
               <div>

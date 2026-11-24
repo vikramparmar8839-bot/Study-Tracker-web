@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { enableNudgeAlerts, useNudgeReceiver, useNudgeSender } from '../hooks/useNudge';
+import { sendPush } from '../lib/push';
 
 const QUICK_MESSAGES = [
   '📚📚',
@@ -50,6 +51,7 @@ export function NudgeButton({ toId, toName, myName, groupName }) {
     setOpen(false);
     setText('');
     send(toId, { fromName: myName, groupName, message });
+     sendPush(toId, { message, groupName });
   };
 
   return (
