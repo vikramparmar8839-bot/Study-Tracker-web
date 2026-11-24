@@ -69,6 +69,11 @@ function retrack() {
   if (channel) channel.track({ here: true, at: Date.now() });
 }
 
+// tell everyone "I'm gone" right now, instead of waiting for the server to notice the dead connection
+function untrackNow() {
+  if (channel) channel.untrack();
+}
+
 function leavePresence() {
   const ch = channel;
   channel = null; // null first so the CLOSED callback doesn't rejoin
@@ -96,6 +101,7 @@ async function touch(force = false) {
  * Call in the always-mounted signed-in layout (already done in App.jsx).
  * - joins the live Presence channel (this is what makes you show as Online)
  * - saves "last seen" on open, every 5 min, and when the page is closed
+ * - on page close, also tells everyone "I left" immediately (untrack), and re-announces if the page is restored
  * It does NOT stop when the tab is hidden, so background tabs stay Online.
  */
 export function useLastSeenHeartbeat() {
@@ -104,8 +110,18 @@ export function useLastSeenHeartbeat() {
     joinPresence();
     touch();
     const id = setInterval(() => touch(), BEAT_EVERY_MS);
-    const onLeave = () => touch(true); // best effort, the browser may cut it short
+    const onLeave = () => {
+      touch(true);   // best effort, the browser may cut it short
+      untrackNow();  // shows as offline for everyone almost instantly on a clean close
+    };
     window.addEventListener('pagehide', onLeave);
+    // the page was frozen in the back/forward cache and is now restored: pagehide removed me, so announce again
+    const onRestore = (e) => {
+      if (!e.persisted) return;
+      joinPresence();
+      retrack();
+    };
+    window.addEventListener('pageshow', onRestore);
     const onBack = () => {
       if (document.visibilityState !== 'visible') return;
       joinPresence(); // rejoin if the channel was dropped
@@ -117,6 +133,7 @@ export function useLastSeenHeartbeat() {
     return () => {
       clearInterval(id);
       window.removeEventListener('pagehide', onLeave);
+      window.removeEventListener('pageshow', onRestore);
       document.removeEventListener('visibilitychange', onBack);
       window.removeEventListener('focus', onBack);
       window.removeEventListener('online', onBack);
