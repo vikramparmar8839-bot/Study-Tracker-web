@@ -21,6 +21,16 @@ export function NudgeButton({ toId, toName, myName, groupName }) {
         whiteSpace: 'nowrap',
         flexShrink: 0,
         marginLeft: 8,
+        /* see-through glass look, same as the other buttons on the card */
+        background: 'rgba(255, 255, 255, 0.06)',
+        border: '1px solid rgba(255, 255, 255, 0.28)',
+        boxShadow: 'none',
+        color: 'rgba(255, 255, 255, 0.9)',
+        backdropFilter: 'blur(10px)',
+        WebkitBackdropFilter: 'blur(10px)',
+        borderRadius: 10,
+        cursor: s === 'sending' || s === 'sent' ? 'default' : 'pointer',
+        opacity: s === 'sending' || s === 'sent' ? 0.6 : 1,
       }}
     >
       {label}
