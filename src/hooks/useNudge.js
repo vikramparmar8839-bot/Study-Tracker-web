@@ -12,6 +12,7 @@ import { useAuth } from '../context/AuthContext';
 const COOLDOWN_MS = 30 * 1000;      // one nudge per person per 30s (sender side)
 const INCOMING_GAP_MS = 10 * 1000;  // ignore the same sender if they nudge again within 10s (receiver side)
 const SEND_TIMEOUT_MS = 6000;
+const MAX_MESSAGE_LEN = 80;         // longest short message that can ride along with a nudge
 
 /* ---------- sound (Web Audio: no audio file needed) ---------- */
 
@@ -117,7 +118,7 @@ function sendTo(toId, payload) {
 /**
  * const { send, status } = useNudgeSender();
  * status(userId) -> 'idle' | 'sending' | 'sent' (cooling down) | 'failed'
- * send(userId, { fromName, groupName })
+ * send(userId, { fromName, groupName, message })  // message is optional, max 80 chars
  */
 export function useNudgeSender() {
   const { user } = useAuth();
@@ -139,7 +140,7 @@ export function useNudgeSender() {
     return 'idle';
   }, []);
 
-  const send = useCallback(async (toId, { fromName, groupName }) => {
+  const send = useCallback(async (toId, { fromName, groupName, message }) => {
     if (!user || toId === user.id || status(toId) !== 'idle') return;
     enableNudgeAlerts(); // we are inside a click, so this is allowed to unlock sound / ask for permission
     sending.add(toId);
@@ -148,6 +149,7 @@ export function useNudgeSender() {
       fromId: user.id,
       fromName: String(fromName || 'Someone').slice(0, 40),
       groupName: String(groupName || '').slice(0, 40),
+      message: String(message || '').trim().slice(0, MAX_MESSAGE_LEN),
       at: Date.now(),
     });
     sending.delete(toId);
@@ -170,7 +172,7 @@ const lastFrom = new Map(); // sender id -> time (ms) of the last nudge I accept
 
 /**
  * Mount once in the always-mounted signed-in layout (NudgeHost does this).
- * onNudge({ id, fromName, groupName }) is called for every accepted nudge, after the sound
+ * onNudge({ id, fromName, groupName, message }) is called for every accepted nudge, after the sound
  * and the system notification have been triggered.
  */
 export function useNudgeReceiver({ soundOn = true, onNudge }) {
@@ -195,6 +197,7 @@ export function useNudgeReceiver({ soundOn = true, onNudge }) {
 
       const fromName = String(payload.fromName || 'Someone').slice(0, 40);
       const groupName = String(payload.groupName || '').slice(0, 40);
+      const message = String(payload.message || '').trim().slice(0, MAX_MESSAGE_LEN);
 
       if (soundRef.current) playNudgeSound();
       try { navigator.vibrate?.([200, 100, 200]); } catch { /* not supported */ }
@@ -204,13 +207,13 @@ export function useNudgeReceiver({ soundOn = true, onNudge }) {
         try {
           if ('Notification' in window && Notification.permission === 'granted') {
             new Notification(`👋 ${fromName} nudged you`, {
-              body: groupName ? `Time to study! (${groupName})` : 'Time to study!',
+              body: message || (groupName ? `Time to study! (${groupName})` : 'Time to study!'),
               tag: `nudge-${payload.fromId}`,
             });
           }
         } catch { /* some mobile browsers only allow notifications via a service worker */ }
       }
-      cbRef.current?.({ id: `${payload.fromId}-${now}`, fromName, groupName });
+      cbRef.current?.({ id: `${payload.fromId}-${now}`, fromName, groupName, message });
     };
 
     const join = () => {
