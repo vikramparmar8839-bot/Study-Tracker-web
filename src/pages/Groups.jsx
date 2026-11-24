@@ -7,6 +7,7 @@ import { fmtDuration } from './Leaderboard';
 import GroupChat from './GroupChat';
 import { useGroupChat } from '../hooks/useGroupChat';
 import { useLastSeen, lastSeenInfo } from '../hooks/useLastSeen';
+import { NudgeButton } from './Nudge';
 import './social.css';
 import './groups-status.css';
 
@@ -288,6 +289,14 @@ function GroupRoom({ group, onLeave, notify, pomodoro }) {
                 <MemberStatus info={info} lastSeen={lastSeen} />
               </span>
               <span className="st-time">{fmtDuration(Number(r.total_sec))}</span>
+              {!isMe && (
+                <NudgeButton
+                  toId={r.user_id}
+                  toName={r.display_name}
+                  myName={rows.find((x) => x.user_id === user.id)?.display_name}
+                  groupName={group.name}
+                />
+              )}
             </li>
           );
         })}

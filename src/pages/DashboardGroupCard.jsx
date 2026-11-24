@@ -7,6 +7,7 @@ import { fmtDuration } from './Leaderboard';
 import GroupChat from './GroupChat';
 import { useGroupChat } from '../hooks/useGroupChat';
 import { Avatar, RankBadge, MemberStatus } from './Groups';
+import { NudgeButton } from './Nudge';
 
 const VISIBLE = 3;
 
@@ -137,6 +138,14 @@ function GroupBody({ group, notify, onOpen, switcher }) {
                 {(active || online || expanded) && <MemberStatus info={info} lastSeen={lastSeen} />}
               </span>
               <span className="st-time">{fmtDuration(Number(r.total_sec))}</span>
+              {!isMe && (
+                <NudgeButton
+                  toId={r.user_id}
+                  toName={r.display_name}
+                  myName={rows.find((x) => x.user_id === user.id)?.display_name}
+                  groupName={group.name}
+                />
+              )}
             </li>
           );
         })}

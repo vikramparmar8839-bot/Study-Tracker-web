@@ -13,6 +13,7 @@ import Groups from "./pages/Groups";
 import DashboardGroupCard from "./pages/DashboardGroupCard";
 import { useChatNotifications } from "./hooks/useChatNotifications";
 import { useLastSeenHeartbeat } from "./hooks/useLastSeen";
+import { NudgeHost } from "./pages/Nudge";
 import {
   parseSyllabus,
   extractPdfText as extractSyllabusText,
@@ -2485,6 +2486,7 @@ function App() {
           {page === "settings" && Settings()}
         </div>
       </main>
+       <NudgeHost soundOn={chatNotify.soundOn} />
     </div>
   );
 }
