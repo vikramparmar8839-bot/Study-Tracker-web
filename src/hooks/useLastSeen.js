@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
 /* =====================================================================
@@ -19,6 +19,11 @@ const listeners = new Set();
 let version = 0;
 let channel = null;
 let users = 0;              // how many places called useLastSeenHeartbeat()
+
+const RETRY_MIN_MS = 2000;
+const RETRY_MAX_MS = 30 * 1000;
+let retryDelay = RETRY_MIN_MS;  // doubles after every failed connection, resets once connected
+let retryTimer = null;
 
 const emit = () => { version += 1; listeners.forEach((fn) => fn()); };
 const subscribe = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
@@ -43,12 +48,18 @@ async function joinPresence() {
     })
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') {
+        retryDelay = RETRY_MIN_MS; // connected again, so the next failure starts from the short delay
         ch.track({ here: true, at: Date.now() });
       }
       if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status) && channel === ch) {
         channel = null;
+        // my own connection dropped, so I can no longer know who is online: don't keep showing stale "Online"
+        online.clear();
+        emit();
         supabase.removeChannel(ch);
-        setTimeout(joinPresence, 2000); // returns early if users === 0
+        clearTimeout(retryTimer);
+        retryTimer = setTimeout(joinPresence, retryDelay); // returns early if users === 0
+        retryDelay = Math.min(retryDelay * 2, RETRY_MAX_MS);
       }
     });
 }
@@ -61,6 +72,8 @@ function retrack() {
 function leavePresence() {
   const ch = channel;
   channel = null; // null first so the CLOSED callback doesn't rejoin
+  clearTimeout(retryTimer);
+  retryDelay = RETRY_MIN_MS;
   if (ch) supabase.removeChannel(ch);
   online.clear();
   emit();
@@ -121,7 +134,7 @@ export function useLastSeenHeartbeat() {
  * Everyone else gets their saved last seen time (or the moment I saw them leave, if newer).
  */
 export function useLastSeen(userIds) {
-  useSyncExternalStore(subscribe, getVersion); // re-render the moment someone joins or leaves
+  const presenceVersion = useSyncExternalStore(subscribe, getVersion); // re-render the moment someone joins or leaves
   const [saved, setSaved] = useState({});
   const [, setTick] = useState(0);
   const key = [...userIds].sort().join(',');
@@ -156,16 +169,22 @@ export function useLastSeen(userIds) {
     };
   }, [key]);
 
-  const out = {};
-  for (const id of userIds) {
-    if (online.has(id)) {
-      out[id] = ONLINE_STAMP; // fixed "online right now" marker, never goes stale between renders
-    } else {
-      const best = Math.max(saved[id] ? Date.parse(saved[id]) : 0, leftAt.get(id) || 0);
-      if (best) out[id] = new Date(best).toISOString();
+  // Same object between renders unless something actually changed, so callers can safely
+  // use the result in useEffect / useMemo dependency lists without re-running them every render.
+  return useMemo(() => {
+    const out = {};
+    for (const id of key ? key.split(',') : []) {
+      if (online.has(id)) {
+        out[id] = ONLINE_STAMP; // fixed "online right now" marker, never goes stale between renders
+      } else {
+        const best = Math.max(saved[id] ? Date.parse(saved[id]) : 0, leftAt.get(id) || 0);
+        if (best) out[id] = new Date(best).toISOString();
+      }
     }
-  }
-  return out;
+    return out;
+    // presenceVersion is not read inside, but it changes whenever `online` / `leftAt` change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, saved, presenceVersion]);
 }
 
 /* ---------- label helper ---------- */
@@ -179,6 +198,7 @@ export function lastSeenInfo(iso) {
   const ms = Math.max(0, Date.now() - Date.parse(iso));
   const min = Math.floor(ms / 60000);
   if (ms < ONLINE_WINDOW_MS) return { online: true, text: 'now' };
+  if (min < 1) return { online: false, text: 'just now' };
   if (min < 60) return { online: false, text: `${min}m ago` };
   const h = Math.floor(min / 60);
   if (h < 24) return { online: false, text: `${h}h ago` };
