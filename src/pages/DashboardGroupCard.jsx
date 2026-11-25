@@ -6,7 +6,8 @@ import { useLastSeen, useLastSeenHeartbeat, lastSeenInfo } from '../hooks/useLas
 import { fmtDuration } from './Leaderboard';
 import GroupChat from './GroupChat';
 import { useGroupChat } from '../hooks/useGroupChat';
-import { Avatar, RankBadge, MemberStatus } from './Groups';
+import { RankBadge, MemberStatus } from './Groups';
+import { Avatar } from './Avatar';
 import { NudgeButton } from './Nudge';
 
 const VISIBLE = 3;
@@ -198,7 +199,7 @@ function GroupBody({ group, notify, onOpen, switcher }) {
       {chatOpen && (
         /* .st-page gives the chat input, Send and emoji buttons their usual look */
         <div className="st-page" style={{ marginTop: 14 }}>
-          <GroupChat chat={chat} />
+          <GroupChat chat={chat} presence={presence} seen={seen} />
         </div>
       )}
     </>

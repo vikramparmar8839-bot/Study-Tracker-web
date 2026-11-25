@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { lastSeenInfo } from '../hooks/useLastSeen';
+import { Avatar } from './Avatar';
 import './group-chat.css';
 
 const MAX_LEN = 500;
@@ -21,9 +23,16 @@ const ONLY_EMOJI = /^(?:\p{Extended_Pictographic}[\uFE0F\u200D]*\s*){1,3}$/u;
 const timeOf = (iso) =>
   new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-export default function GroupChat({ chat }) {
+function typingLabel(names) {
+  if (names.length === 1) return `${names[0]} is typing…`;
+  if (names.length === 2) return `${names[0]} and ${names[1]} are typing…`;
+  return 'Several people are typing…';
+}
+
+/* presence + seen are optional: pass them to show the live status ring on avatars */
+export default function GroupChat({ chat, presence, seen }) {
   const { user } = useAuth();
-  const { messages, send, loading, error } = chat;
+  const { messages, send, loading, error, typingNames = [], notifyTyping } = chat;
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -32,11 +41,28 @@ export default function GroupChat({ chat }) {
   const inputRef = useRef(null);
   const pickerRef = useRef(null);
 
-  // stay at the newest message
+  // the name other people see when I am typing
+  const myName =
+    messages.find((m) => m.user_id === user.id)?.sender_name ||
+    user.user_metadata?.full_name ||
+    user.user_metadata?.name ||
+    user.email?.split('@')[0] ||
+    'Someone';
+
+  // status ring for a member's avatar (undefined = no ring, when presence isn't passed in)
+  function ringFor(uid) {
+    if (!presence && !seen) return undefined;
+    const info = presence?.[uid];
+    if (info && info.state !== 'idle') return info.state;
+    return lastSeenInfo(seen?.[uid])?.online ? 'online' : 'offline';
+  }
+
+  // stay at the newest message (and show the typing row when it appears)
+  const someoneTyping = typingNames.length > 0;
   useEffect(() => {
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length]);
+  }, [messages.length, someoneTyping]);
 
   // close the picker when clicking elsewhere or pressing Escape
   useEffect(() => {
@@ -53,13 +79,18 @@ export default function GroupChat({ chat }) {
     };
   }, [pickerOpen]);
 
+  function handleChange(value) {
+    setText(value);
+    if (value.trim()) notifyTyping?.(myName);
+  }
+
   function insertEmoji(emoji) {
     const el = inputRef.current;
     const start = el?.selectionStart ?? text.length;
     const end = el?.selectionEnd ?? text.length;
     const next = text.slice(0, start) + emoji + text.slice(end);
     if (next.length > MAX_LEN) return;
-    setText(next);
+    handleChange(next);
     requestAnimationFrame(() => {
       if (!el) return;
       el.focus();
@@ -92,13 +123,23 @@ export default function GroupChat({ chat }) {
           const mine = m.user_id === user.id;
           const big = ONLY_EMOJI.test(m.body.trim());
           return (
-            <div key={m.id} className={mine ? 'st-msg mine' : 'st-msg'}>
-              {!mine && <span className="st-msg-name">{m.sender_name}</span>}
-              <div className={big ? 'st-msg-bubble emoji-only' : 'st-msg-bubble'}>{m.body}</div>
-              <span className="st-msg-time">{timeOf(m.created_at)}</span>
+            <div key={m.id} className={mine ? 'st-msg-row mine' : 'st-msg-row'}>
+              {!mine && <Avatar name={m.sender_name} id={m.user_id} status={ringFor(m.user_id)} />}
+              <div className={mine ? 'st-msg mine' : 'st-msg'}>
+                {!mine && <span className="st-msg-name">{m.sender_name}</span>}
+                <div className={big ? 'st-msg-bubble emoji-only' : 'st-msg-bubble'}>{m.body}</div>
+                <span className="st-msg-time">{timeOf(m.created_at)}</span>
+              </div>
             </div>
           );
         })}
+
+        {someoneTyping && (
+          <div className="st-typing" role="status" aria-live="polite">
+            <span className="st-typing-dots" aria-hidden="true"><i /><i /><i /></span>
+            <span>{typingLabel(typingNames)}</span>
+          </div>
+        )}
       </div>
 
       {error && <p className="st-error">{error}</p>}
@@ -144,7 +185,7 @@ export default function GroupChat({ chat }) {
         <input
           ref={inputRef}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => handleChange(e.target.value)}
           placeholder="Message your group…"
           maxLength={MAX_LEN}
           autoComplete="off"
