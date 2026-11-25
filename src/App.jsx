@@ -1,21 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
-import PomodoroTimer, {
-  usePomodoro,
-  POMODORO_STORAGE_KEY,
-} from "./PomodoroTimer";
+import { usePomodoro, POMODORO_STORAGE_KEY } from "./PomodoroTimer";
 import "./index.css";
-import "./todo.css";
-import liquidGlassCss from "./liquid-glass.css?inline";
 import { useAuth } from "./context/AuthContext";
 import Leaderboard from "./pages/Leaderboard";
 import Friends from "./pages/Friends";
 import Groups from "./pages/Groups";
-import DashboardGroupCard from "./pages/DashboardGroupCard";
 import { useChatNotifications } from "./hooks/useChatNotifications";
 import { useLastSeenHeartbeat } from "./hooks/useLastSeen";
 import { NudgeHost } from "./pages/Nudge";
-import PushToggle from "./pages/PushToggle";
+import Dashboard from "./pages/Dashboard";
+import Statistics from "./pages/Statistics";
+import Settings from "./pages/Settings";
+import Timetable from "./pages/Timetable";
+import Syllabus from "./pages/Syllabus";
+import Attendance from "./pages/Attendance";
+import useTodos, { TODOS_STORAGE_KEY } from "./hooks/useTodos";
+import { DEFAULT_SUBJECTS, DEFAULT_SETTINGS, ACCENT_OPTIONS } from "./constants";
+import { applyLiquidGlass, getLocalDateKey } from "./utils";
 import {
   parseSyllabus,
   extractPdfText as extractSyllabusText,
@@ -28,31 +30,6 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url
 ).toString();
 
-const DEFAULT_SUBJECTS = [
-  { id: 1, name: "Mathematics", present: 17, absent: 7, benchmark: 75 },
-  { id: 2, name: "Physics", present: 23, absent: 5, benchmark: 80 },
-  { id: 3, name: "C++ Programming", present: 17, absent: 8, benchmark: 50 },
-];
-
-// Liquid glass theme: liquid-glass.css is loaded as text and added to / removed
-// from <head> on demand. It goes first in <head> so it keeps the same low
-// priority it had when index.css imported it.
-const GLASS_STYLE_ID = "studytrack-liquid-glass";
-
-function applyLiquidGlass(enabled) {
-  document.documentElement.dataset.studytrackGlass = enabled ? "on" : "off";
-  const existing = document.getElementById(GLASS_STYLE_ID);
-
-  if (enabled && !existing) {
-    const style = document.createElement("style");
-    style.id = GLASS_STYLE_ID;
-    style.textContent = liquidGlassCss;
-    document.head.prepend(style);
-  } else if (!enabled && existing) {
-    existing.remove();
-  }
-}
-
 // Apply the saved choice right away so the page doesn't flash without glass
 try {
   const savedSettings = JSON.parse(
@@ -61,43 +38,6 @@ try {
   applyLiquidGlass(savedSettings.liquidGlass !== false);
 } catch {
   applyLiquidGlass(true);
-}
-
-const DEFAULT_SETTINGS = {
-  studentName: "",
-  defaultBenchmark: 75,
-  warningThreshold: 75,
-  dailyStudyGoal: 180,
-  theme: "dark",
-  accent: "indigo",
-  liquidGlass: true,
-};
-
-// Accent presets. The actual colors live in index.css
-// (:root[data-studytrack-accent="..."]); "swatch" is only for the picker dots.
-const ACCENT_OPTIONS = [
-  { id: "indigo", label: "Indigo", swatch: "#6366f1" },
-  { id: "violet", label: "Violet", swatch: "#8b5cf6" },
-  { id: "rose", label: "Rose", swatch: "#f43f5e" },
-  { id: "emerald", label: "Emerald", swatch: "#10b981" },
-  { id: "orange", label: "Orange", swatch: "#f97316" },
-  { id: "cyan", label: "Cyan", swatch: "#06b6d4" },
-];
-
-function getLocalDateKey(date = new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function formatStudyTime(minutes) {
-  const safe = Math.max(0, Math.round(Number(minutes) || 0));
-  const hours = Math.floor(safe / 60);
-  const mins = safe % 60;
-  if (hours === 0) return `${mins}m`;
-  if (mins === 0) return `${hours}h`;
-  return `${hours}h ${mins}m`;
 }
 
 function App() {
@@ -185,37 +125,8 @@ function App() {
     }
   });
 
-  const [todos, setTodos] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem("studytrack-todos") || "[]");
-      return Array.isArray(saved) ? saved : [];
-    } catch {
-      return [];
-    }
-  });
-  const [newTodo, setNewTodo] = useState("");
-
-  function addTodo() {
-    const text = newTodo.trim();
-    if (!text) return;
-    setTodos((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), text, done: false },
-    ]);
-    setNewTodo("");
-  }
-
-  function toggleTodo(id) {
-    setTodos((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t))
-    );
-  }
-
-  function deleteTodo(id) {
-    setTodos((prev) => prev.filter((t) => t.id !== id));
-  }
-
-  const todosDone = todos.filter((t) => t.done).length;
+  const todosApi = useTodos();
+  const { todos, setTodos } = todosApi;
 
   // Called by the Pomodoro timer whenever a focus session ends
   function logFocusSession({ subject, minutes }) {
@@ -263,10 +174,6 @@ function App() {
   useEffect(() => {
     localStorage.setItem("studytrack-sessions", JSON.stringify(studySessions));
   }, [studySessions]);
-
-  useEffect(() => {
-    localStorage.setItem("studytrack-todos", JSON.stringify(todos));
-  }, [todos]);
 
   // =========================================================
   // ATTENDANCE
@@ -792,468 +699,6 @@ function App() {
     }
   }
 
-  // =========================================================
-  // DASHBOARD
-  // =========================================================
-
-  function Dashboard() {
-    const goal = Math.max(1, Number(settings.dailyStudyGoal) || 180);
-    const goalProgress = Math.min(100, (todayStudyMinutes / goal) * 100);
-    const greeting =
-      new Date().getHours() < 12
-        ? "Good morning"
-        : new Date().getHours() < 18
-        ? "Good afternoon"
-        : "Good evening";
-
-    return (
-      <>
-        <div className="dashboard-welcome">
-          <h2>
-            {greeting}
-            {settings.studentName ? `, ${settings.studentName}` : ""} 👋
-          </h2>
-          <p>Stay consistent. Small sessions add up.</p>
-        </div>
-
-        <div className="stats-grid">
-          <div className="stat-card">
-            <span>Overall Attendance</span>
-            <strong>{overallAttendance()}%</strong>
-          </div>
-          <div className="stat-card">
-            <span>Syllabus Progress</span>
-            <strong>{getOverallSyllabusProgress()}%</strong>
-          </div>
-          <div className="stat-card">
-            <span>Today's Study</span>
-            <strong>{formatStudyTime(todayStudyMinutes)}</strong>
-          </div>
-          <div className="stat-card">
-            <span>Study Streak</span>
-            <strong>🔥 {studyStreak}</strong>
-          </div>
-        </div>
-
-        <div className="productivity-grid">
-          <PomodoroTimer
-            pomodoro={pomodoro}
-            subjects={subjects}
-            sessionsToday={sessionsToday}
-          />
-
-          <div className="productivity-side">
-            <div className="productivity-mini-card">
-              <span className="mini-label">Daily Goal</span>
-              <strong className="mini-value">
-                {formatStudyTime(todayStudyMinutes)}
-              </strong>
-              <span className="mini-sub">
-                Goal: {formatStudyTime(goal)}
-              </span>
-              <div className="small-progress">
-                <div style={{ width: `${goalProgress}%` }} />
-              </div>
-            </div>
-
-            <div className="productivity-mini-card">
-              <span className="mini-label">This Week</span>
-              <strong className="mini-value">
-                {formatStudyTime(weeklyStudyMinutes)}
-              </strong>
-              <span className="mini-sub">Last 7 days</span>
-            </div>
-
-            <div className="productivity-mini-card weekchart-card">
-              <div className="weekchart-header">
-                <span className="mini-label">Study Activity</span>
-                <span className="weekchart-streak">
-                  🔥 {studyStreak} {studyStreak === 1 ? "day" : "days"}
-                </span>
-              </div>
-
-              <div
-                className="weekchart"
-                role="img"
-                aria-label={`Study time this week: ${weeklyChart.days
-                  .map(
-                    (day) =>
-                      `${day.label} ${
-                        day.minutes ? formatStudyTime(day.minutes) : "none"
-                      }`
-                  )
-                  .join(", ")}`}
-              >
-                <div
-                  className="weekchart-goal"
-                  style={{
-                    top: `calc(var(--chart-h) * ${
-                      (100 - weeklyChart.goalLine) / 100
-                    })`,
-                  }}
-                  aria-hidden="true"
-                />
-                {weeklyChart.days.map((day) => (
-                  <div
-                    key={day.key}
-                    className={`weekchart-col ${day.isToday ? "today" : ""} ${
-                      day.isFuture ? "future" : ""
-                    }`}
-                    title={`${day.fullLabel}: ${
-                      day.minutes ? formatStudyTime(day.minutes) : "No study"
-                    }`}
-                  >
-                    <div className="weekchart-track">
-                      <div
-                        className={`weekchart-bar level-${day.level}`}
-                        style={{ height: `${day.height}%` }}
-                      />
-                    </div>
-                    <span className="weekchart-day">{day.label}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="weekchart-footer">
-                <span className="mini-sub">
-                  {weeklyChart.activeDays} active{" "}
-                  {weeklyChart.activeDays === 1 ? "day" : "days"} this week
-                </span>
-                <span className="weekchart-key">
-                  <i aria-hidden="true" /> Daily goal
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <DashboardGroupCard
-          notify={chatNotify}
-          onOpen={() => navigateTo("groups")}
-        />
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,320px),1fr))",
-            gap: "20px",
-            marginTop: "20px",
-          }}
-        >
-          <section className="panel">
-            <div className="panel-header">
-              <div>
-                <h2>Study by Subject</h2>
-                <p>Where your study time went in the last 7 days.</p>
-              </div>
-            </div>
-
-            {studySessions.length === 0 ? (
-              <p className="empty">
-                Start a focus session to see your study distribution.
-              </p>
-            ) : (
-              weeklySubjectStudyTotals.map((item) => (
-                <div className="study-subject-row" key={item.name}>
-                  <div className="study-subject-header">
-                    <span>{item.name}</span>
-                    <strong>{formatStudyTime(item.minutes)}</strong>
-                  </div>
-                  <div className="study-subject-bar">
-                    <div
-                      style={{
-                        width: `${
-                          (item.minutes / maxWeeklySubjectStudyMinutes) * 100
-                        }%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              ))
-            )}
-          </section>
-
-          <section className="panel todo-panel">
-            <div className="panel-header">
-              <div>
-                <h2>To-do List</h2>
-                <p>
-                  {todos.length
-                    ? `${todosDone} of ${todos.length} done`
-                    : "Your personal tasks."}
-                </p>
-              </div>
-              {todosDone > 0 && (
-                <button
-                  className="danger-text"
-                  onClick={() => setTodos((prev) => prev.filter((t) => !t.done))}
-                >
-                  Clear done
-                </button>
-              )}
-            </div>
-
-            {todos.length > 0 && (
-              <div className="todo-progress" aria-hidden="true">
-                <div style={{ width: `${(todosDone / todos.length) * 100}%` }} />
-              </div>
-            )}
-
-            <div className="todo-add">
-              <input
-                type="text"
-                placeholder="Add a task…"
-                value={newTodo}
-                onChange={(e) => setNewTodo(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addTodo()}
-              />
-              <button className="primary-button" onClick={addTodo}>
-                Add
-              </button>
-            </div>
-
-            {todos.length === 0 ? (
-              <div className="todo-empty">
-                <span aria-hidden="true">📝</span>
-                <p>Nothing to do yet</p>
-                <small>Add a task above to get started.</small>
-              </div>
-            ) : (
-              <ul className="todo-list">
-                {[...todos]
-                  .sort((a, b) => Number(a.done) - Number(b.done))
-                  .map((t) => (
-                    <li key={t.id} className={`todo-item ${t.done ? "done" : ""}`}>
-                      <button
-                        type="button"
-                        role="checkbox"
-                        aria-checked={t.done}
-                        aria-label={`Mark "${t.text}" as ${t.done ? "not done" : "done"}`}
-                        className="todo-check"
-                        onClick={() => toggleTodo(t.id)}
-                      >
-                        <svg viewBox="0 0 16 16" aria-hidden="true">
-                          <path d="M3.5 8.5l3 3 6-7" />
-                        </svg>
-                      </button>
-                      <span className="todo-text" onClick={() => toggleTodo(t.id)}>
-                        {t.text}
-                      </span>
-                      <button
-                        type="button"
-                        className="todo-delete"
-                        aria-label={`Delete "${t.text}"`}
-                        onClick={() => deleteTodo(t.id)}
-                      >
-                        ✕
-                      </button>
-                    </li>
-                  ))}
-              </ul>
-            )}
-          </section>
-        </div>
-
-        <section className="panel" style={{ marginTop: "20px" }}>
-          <div className="panel-header">
-            <div>
-              <h2>Recent Study Sessions</h2>
-              <p>Your latest focus sessions.</p>
-            </div>
-            {studySessions.length > 0 && (
-              <button className="danger-text" onClick={clearStudyHistory}>
-                Clear History
-              </button>
-            )}
-          </div>
-
-          {studySessions.length === 0 ? (
-            <p className="empty">No study sessions yet.</p>
-          ) : (
-            <div className="study-history">
-              {[...studySessions]
-                .slice(-7)
-                .reverse()
-                .map((session) => (
-                  <div className="study-history-row" key={session.id}>
-                    <div>
-                      <strong>{session.subject}</strong>
-                      <div className="study-history-date">
-                        {session.date}
-                      </div>
-                    </div>
-                    <div className="study-history-time">
-                      {formatStudyTime(session.duration)}
-                    </div>
-                  </div>
-                ))}
-            </div>
-          )}
-        </section>
-      </>
-    );
-  }
-
-  // =========================================================
-  // ATTENDANCE PAGE
-  // =========================================================
-
-  function Attendance() {
-    return (
-      <>
-        <div className="page-header">
-          <div>
-            <h1>Attendance</h1>
-            <p>Track attendance for every subject.</p>
-          </div>
-          <button
-            className="primary-button"
-            onClick={() => setShowAdd(!showAdd)}
-          >
-            + Add Subject
-          </button>
-        </div>
-
-        {showAdd && (
-          <div className="panel add-form">
-            <h2>Add Subject</h2>
-            <input
-              type="text"
-              placeholder="Subject name"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-            />
-            <input
-              type="number"
-              min="0"
-              max="100"
-              placeholder="Benchmark %"
-              value={newBenchmark}
-              onChange={(e) => setNewBenchmark(e.target.value)}
-            />
-            <button className="primary-button" onClick={addSubject}>
-              Add Subject
-            </button>
-          </div>
-        )}
-
-        <div className="attendance-list">
-          {subjects.map((subject) => {
-            const percentage = getPercentage(subject);
-            const needed = getClassesNeeded(subject);
-            const canMiss = getClassesCanMiss(subject);
-
-            return (
-              <div className="attendance-card" key={subject.id}>
-                <div className="attendance-card-header">
-                  <div>
-                    <h2>{subject.name}</h2>
-                    <span>{subject.present + subject.absent} total classes</span>
-                  </div>
-                  <button
-                    className="danger-text"
-                    onClick={() => deleteSubject(subject.id)}
-                  >
-                    Delete
-                  </button>
-                </div>
-
-                <div className="attendance-main">
-                  <div className="big-percentage">{percentage}%</div>
-                  <p
-                    className={
-                      percentage >= subject.benchmark
-                        ? "good-text"
-                        : "danger-text"
-                    }
-                  >
-                    {percentage >= subject.benchmark
-                      ? "Above your benchmark"
-                      : "Below your benchmark"}
-                  </p>
-                </div>
-
-                <div className="benchmark-box">
-                  <label>
-                    Benchmark
-                    <div className="benchmark-input">
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={subject.benchmark}
-                        onChange={(e) =>
-                          updateBenchmark(subject.id, e.target.value)
-                        }
-                      />
-                      <span>%</span>
-                    </div>
-                  </label>
-                </div>
-
-                <div className="large-progress">
-                  <div style={{ width: `${Math.min(percentage, 100)}%` }} />
-                </div>
-
-                <div className="attendance-numbers">
-                  <span>
-                    Present: <strong>{subject.present}</strong>
-                  </span>
-                  <span>
-                    Absent: <strong>{subject.absent}</strong>
-                  </span>
-                  <span>
-                    Total: <strong>{subject.present + subject.absent}</strong>
-                  </span>
-                </div>
-
-                <div className="attendance-actions">
-                  <button
-                    className="present-button"
-                    onClick={() => markAttendance(subject.id, "present")}
-                  >
-                    + Present
-                  </button>
-                  <button
-                    className="absent-button"
-                    onClick={() => markAttendance(subject.id, "absent")}
-                  >
-                    + Absent
-                  </button>
-                </div>
-
-                <div className="attendance-message">
-                  {percentage < subject.benchmark ? (
-                    needed === Infinity ? (
-                      <span>100% attendance is required.</span>
-                    ) : (
-                      <span>
-                        Attend the next <strong>{needed}</strong> classes to
-                        reach <strong>{subject.benchmark}%</strong>.
-                      </span>
-                    )
-                  ) : canMiss === Infinity ? (
-                    <span>You can miss any number of classes.</span>
-                  ) : (
-                    <span>
-                      You can miss <strong>{canMiss}</strong> class
-                      {canMiss !== 1 ? "es" : ""} and stay at{" "}
-                      <strong>{subject.benchmark}%</strong>.
-                    </span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </>
-    );
-  }
-
-  // =========================================================
-  // SYLLABUS PAGE
-  // =========================================================
-
   function renderSemesterSubjects(list) {
     return (
       <div className="syllabus-subject-grid">
@@ -1273,377 +718,6 @@ function App() {
           </button>
         ))}
       </div>
-    );
-  }
-
-  function Syllabus() {
-    const allSubjects = getAllSubjects(syllabus);
-
-    const selectedSubject = allSubjects.find(
-      (subject) => subject.id === selectedSyllabusSubject
-    );
-
-    return (
-      <>
-        <div className="page-header">
-          <div>
-            <h1>Syllabus</h1>
-            <p>Track your complete college syllabus.</p>
-          </div>
-          <label className="pdf-upload-button">
-            {uploadingPdf ? "Reading PDF..." : "📄 Upload Complete Syllabus"}
-            <input
-              type="file"
-              accept=".pdf,application/pdf"
-              disabled={uploadingPdf}
-              onChange={handleWholePdfUpload}
-            />
-          </label>
-        </div>
-
-        {!syllabus ? (
-          <div className="panel empty-state">
-            <div className="empty-icon">📚</div>
-            <h2>Upload your syllabus</h2>
-            <p>
-              Upload any syllabus PDF (college scheme, JEE, NEET, etc.). The app
-              will detect subjects, units and topics automatically.
-            </p>
-            <label className="pdf-upload-button">
-              📄 Choose PDF
-              <input
-                type="file"
-                accept=".pdf,application/pdf"
-                onChange={handleWholePdfUpload}
-              />
-            </label>
-          </div>
-        ) : (
-          <>
-            <div className="syllabus-overall-card">
-              <div>
-                <span>Overall Syllabus Progress</span>
-                <strong>{getOverallSyllabusProgress()}%</strong>
-              </div>
-              <div className="large-progress">
-                <div
-                  style={{ width: `${getOverallSyllabusProgress()}%` }}
-                />
-              </div>
-            </div>
-
-            <div className="semester-tabs">
-              {(syllabus.groups || []).map((group) => (
-                <div key={group.id}>
-                  <h2>{group.label}</h2>
-                  {renderSemesterSubjects(group.subjects)}
-                </div>
-              ))}
-            </div>
-
-            {selectedSubject && (
-              <div className="panel selected-syllabus">
-                <div className="selected-syllabus-header">
-                  <div>
-                    <h2>{selectedSubject.name}</h2>
-                    <span>{selectedSubject.code}</span>
-                  </div>
-                  <strong>{getSubjectProgress(selectedSubject)}%</strong>
-                </div>
-
-                <div className="large-progress">
-                  <div
-                    style={{
-                      width: `${getSubjectProgress(selectedSubject)}%`,
-                    }}
-                  />
-                </div>
-
-                <div className="unit-list">
-                  {selectedSubject.units.map((unit) => {
-                    const completed = unit.topics.filter(
-                      (topic) => topic.completed
-                    ).length;
-
-                    return (
-                      <div className="unit-card" key={unit.id}>
-                        <button
-                          className="unit-header"
-                          onClick={() => toggleUnit(unit.id)}
-                        >
-                          <div>
-                            <strong>{unit.name}</strong>
-                            <span>
-                              {completed} / {unit.topics.length} completed
-                            </span>
-                          </div>
-                          <span>
-                            {expandedUnits[unit.id] ? "▲" : "▼"}
-                          </span>
-                        </button>
-
-                        {expandedUnits[unit.id] && (
-                          <div className="unit-topics">
-                            {unit.topics.map((topic) => (
-                              <label
-                                className={`syllabus-topic ${
-                                  topic.completed ? "completed" : ""
-                                }`}
-                                key={topic.id}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={topic.completed}
-                                  onChange={() =>
-                                    toggleTopic(
-                                      selectedSubject.id,
-                                      unit.id,
-                                      topic.id
-                                    )
-                                  }
-                                />
-                                <span>{topic.name}</span>
-                              </label>
-                            ))}
-
-                            <div className="manual-topic">
-                              <input
-                                type="text"
-                                placeholder="Add topic..."
-                                value={newTopic}
-                                onChange={(e) => setNewTopic(e.target.value)}
-                              />
-                              <button
-                                className="secondary-button"
-                                onClick={() =>
-                                  addManualTopic(
-                                    selectedSubject.id,
-                                    unit.id
-                                  )
-                                }
-                              >
-                                + Add
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </>
-    );
-  }
-
-  // =========================================================
-  // TIMETABLE PAGE
-  // =========================================================
-
-  function Timetable() {
-    const totalClasses = timetable.length;
-
-    const setField = (key) => (e) =>
-      setTimetableForm((prev) => ({ ...prev, [key]: e.target.value }));
-
-    return (
-      <>
-        <div className="page-header">
-          <div>
-            <h1>Timetable</h1>
-            <p>Plan your weekly classes in one place.</p>
-          </div>
-          <button
-            className="primary-button"
-            onClick={() => openTimetableForm()}
-          >
-            + Add Class
-          </button>
-        </div>
-
-        <div className="stats-grid cols-3">
-          <div className="stat-card">
-            <span>Weekly Classes</span>
-            <strong>{totalClasses}</strong>
-          </div>
-          <div className="stat-card">
-            <span>Days Scheduled</span>
-            <strong>
-              {DAYS.filter((day) => getDayEntries(day).length > 0).length}
-            </strong>
-          </div>
-          <div className="stat-card">
-            <span>Subjects Scheduled</span>
-            <strong>
-              {new Set(timetable.map((entry) => entry.subject)).size}
-            </strong>
-          </div>
-        </div>
-
-        {showTimetableForm && (
-          <div className="panel timetable-form">
-            <div className="panel-header">
-              <div>
-                <h2>{editingTimetableId ? "Edit Class" : "Add Class"}</h2>
-                <p>Enter the details for this weekly class.</p>
-              </div>
-              <button
-                className="danger-text"
-                onClick={() => {
-                  setShowTimetableForm(false);
-                  resetTimetableForm();
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-
-            <div className="form-grid">
-              <label>
-                Day
-                <select value={timetableForm.day} onChange={setField("day")}>
-                  {DAYS.map((day) => (
-                    <option key={day} value={day}>
-                      {day}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label>
-                Subject
-                <select
-                  value={timetableForm.subject}
-                  onChange={setField("subject")}
-                >
-                  <option value="">Select subject</option>
-                  {subjects.map((subject) => (
-                    <option key={subject.id} value={subject.name}>
-                      {subject.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label>
-                Start time
-                <input
-                  type="time"
-                  value={timetableForm.startTime}
-                  onChange={setField("startTime")}
-                />
-              </label>
-
-              <label>
-                End time
-                <input
-                  type="time"
-                  value={timetableForm.endTime}
-                  onChange={setField("endTime")}
-                />
-              </label>
-
-              <label>
-                Room
-                <input
-                  type="text"
-                  placeholder="e.g. Lab 2"
-                  value={timetableForm.room}
-                  onChange={setField("room")}
-                />
-              </label>
-
-              <label>
-                Teacher
-                <input
-                  type="text"
-                  placeholder="Optional"
-                  value={timetableForm.teacher}
-                  onChange={setField("teacher")}
-                />
-              </label>
-            </div>
-
-            <button className="primary-button" onClick={saveTimetableEntry}>
-              {editingTimetableId ? "Save Changes" : "Add Class"}
-            </button>
-          </div>
-        )}
-
-        {timetable.length === 0 ? (
-          <div className="panel empty-state">
-            <div className="empty-icon">🗓️</div>
-            <h2>Your timetable is empty</h2>
-            <p>
-              Add your weekly classes and they will stay saved in this browser.
-            </p>
-            <button
-              className="primary-button"
-              onClick={() => openTimetableForm()}
-            >
-              + Add Your First Class
-            </button>
-          </div>
-        ) : (
-          <div className="timetable-grid">
-            {DAYS.map((day) => {
-              const entries = getDayEntries(day);
-
-              return (
-                <section key={day} className="panel">
-                  <div className="panel-header">
-                    <h2>{day}</h2>
-                    <span>
-                      {entries.length} class
-                      {entries.length === 1 ? "" : "es"}
-                    </span>
-                  </div>
-
-                  {entries.length === 0 ? (
-                    <div className="timetable-empty">No classes</div>
-                  ) : (
-                    <div className="timetable-list">
-                      {entries.map((entry) => (
-                        <div key={entry.id} className="timetable-class">
-                          <strong className="timetable-class-name">
-                            {entry.subject}
-                          </strong>
-
-                          <div className="timetable-class-meta">
-                            <span>
-                              🕐 {entry.startTime} – {entry.endTime}
-                            </span>
-                            {entry.room && <span>📍 {entry.room}</span>}
-                            {entry.teacher && <span>👨‍🏫 {entry.teacher}</span>}
-                          </div>
-
-                          <div className="timetable-class-actions">
-                            <button
-                              className="secondary-button"
-                              onClick={() => openTimetableForm(entry)}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              className="danger-text"
-                              onClick={() => deleteTimetableEntry(entry.id)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </section>
-              );
-            })}
-          </div>
-        )}
-      </>
     );
   }
 
@@ -1751,708 +825,10 @@ function App() {
     localStorage.removeItem("studytrack-timetable");
     localStorage.removeItem("studytrack-settings");
     localStorage.removeItem("studytrack-sessions");
-    localStorage.removeItem("studytrack-todos");
+    localStorage.removeItem(TODOS_STORAGE_KEY);
     localStorage.removeItem(POMODORO_STORAGE_KEY);
 
     alert("StudyTrack has been reset.");
-  }
-
-  function Settings() {
-    const clamp = (value) => Math.min(100, Math.max(0, Number(value)));
-    const goal = Math.max(1, Number(settings.dailyStudyGoal) || 180);
-
-    return (
-      <>
-        <div className="page-header">
-          <div>
-            <h1>Settings</h1>
-            <p>Personalize StudyTrack and manage your data.</p>
-          </div>
-        </div>
-
-        <div
-          style={{
-            display: "grid",
-            gap: "20px",
-            maxWidth: "900px",
-          }}
-        >
-          <div className="panel">
-            <div className="panel-header">
-              <div>
-                <h2>👤 Student Profile</h2>
-                <p>Your name is stored only in this browser for now.</p>
-              </div>
-            </div>
-
-            <label>
-              Student name
-              <input
-                type="text"
-                placeholder="Enter your name"
-                value={settings.studentName}
-                onChange={(e) =>
-                  updateSetting("studentName", e.target.value)
-                }
-              />
-            </label>
-          </div>
-
-          <div className="panel">
-            <div className="panel-header">
-              <div>
-                <h2>🎯 Attendance Preferences</h2>
-                <p>These defaults are used for new attendance subjects.</p>
-              </div>
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
-                gap: "16px",
-              }}
-            >
-              <label>
-                Default benchmark (%)
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={settings.defaultBenchmark}
-                  onChange={(e) => {
-                    const value = clamp(e.target.value);
-                    updateSetting("defaultBenchmark", value);
-                    setNewBenchmark(value);
-                  }}
-                />
-              </label>
-
-              <label>
-                Warning threshold (%)
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={settings.warningThreshold}
-                  onChange={(e) =>
-                    updateSetting(
-                      "warningThreshold",
-                      clamp(e.target.value)
-                    )
-                  }
-                />
-              </label>
-            </div>
-          </div>
-
-          <div className="panel">
-            <div className="panel-header">
-              <div>
-                <h2>📚 Study Goal</h2>
-                <p>Set how much focused study you want to complete each day.</p>
-              </div>
-            </div>
-
-            <label>
-              Daily study goal (minutes)
-              <input
-                type="number"
-                min="1"
-                max="1440"
-                value={goal}
-                onChange={(e) =>
-                  updateSetting(
-                    "dailyStudyGoal",
-                    Math.min(1440, Math.max(1, Number(e.target.value) || 1))
-                  )
-                }
-              />
-            </label>
-
-            <p style={{ marginTop: "10px", fontSize: "13px", opacity: 0.65 }}>
-              Current goal: {formatStudyTime(goal)} per day.
-            </p>
-          </div>
-
-          <div className="panel">
-            <div className="panel-header">
-              <div>
-                <h2>🌙 Appearance</h2>
-                <p>
-                  Choose your preferred theme and accent color.
-                </p>
-              </div>
-            </div>
-
-            <label>
-              Theme
-              <select
-                value={settings.theme}
-                onChange={(e) => updateSetting("theme", e.target.value)}
-              >
-                <option value="dark">Dark</option>
-                <option value="light">Light</option>
-              </select>
-            </label>
-
-            <div className="glass-toggle-row">
-              <div className="glass-toggle-text">
-                <strong>Liquid glass</strong>
-                <span>Frosted, translucent cards and blur effects.</span>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={settings.liquidGlass !== false}
-                aria-label="Liquid glass theme"
-                className={`glass-switch ${
-                  settings.liquidGlass !== false ? "on" : ""
-                }`}
-                onClick={() =>
-                  updateSetting("liquidGlass", settings.liquidGlass === false)
-                }
-              >
-                <span className="glass-switch-knob" />
-                <span className="glass-switch-label">
-                  {settings.liquidGlass !== false ? "On" : "Off"}
-                </span>
-              </button>
-            </div>
-
-            <div style={{ marginTop: "18px" }}>
-              <span>Accent color</span>
-              <div
-                className="accent-picker"
-                role="radiogroup"
-                aria-label="Accent color"
-              >
-                {ACCENT_OPTIONS.map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={settings.accent === option.id}
-                    className={`accent-swatch ${
-                      settings.accent === option.id ? "selected" : ""
-                    }`}
-                    onClick={() => updateSetting("accent", option.id)}
-                  >
-                    <span
-                      className="accent-dot"
-                      style={{ "--swatch": option.swatch }}
-                    />
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <p style={{ marginTop: "14px", fontSize: "13px", opacity: 0.65 }}>
-              Theme, glass effect and accent color update immediately and are
-              remembered on this device.
-            </p>
-          </div>
-
-           <PushToggle />
-           
-          <div className="panel">
-            <div className="panel-header">
-              <div>
-                <h2>💾 Backup & Restore</h2>
-                <p>
-                  Save your attendance, syllabus, timetable, study history and
-                  settings as one file.
-                </p>
-              </div>
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                gap: "12px",
-                flexWrap: "wrap",
-              }}
-            >
-              <button className="primary-button" onClick={exportBackup}>
-                ⬇️ Export Backup
-              </button>
-
-              <label
-                className="secondary-button"
-                style={{ cursor: "pointer" }}
-              >
-                {importingBackup ? "Importing..." : "⬆️ Import Backup"}
-                <input
-                  type="file"
-                  accept="application/json,.json"
-                  hidden
-                  disabled={importingBackup}
-                  onChange={handleBackupImport}
-                />
-              </label>
-            </div>
-          </div>
-
-          <div
-            className="panel"
-            style={{ border: "1px solid rgba(239,68,68,0.35)" }}
-          >
-            <div className="panel-header">
-              <div>
-                <h2>🗑️ Reset App Data</h2>
-                <p>This removes all StudyTrack data saved in this browser.</p>
-              </div>
-            </div>
-
-            <button className="danger-text" onClick={resetAllData}>
-              Reset all data
-            </button>
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  // =========================================================
-  // STATISTICS PAGE
-  // =========================================================
-
-  function Statistics() {
-    const totalPresent = subjects.reduce((sum, s) => sum + s.present, 0);
-    const totalAbsent = subjects.reduce((sum, s) => sum + s.absent, 0);
-    const totalClasses = totalPresent + totalAbsent;
-    const overall =
-      totalClasses > 0
-        ? Math.round((totalPresent / totalClasses) * 100)
-        : 0;
-
-    const subjectStats = subjects.map((s) => ({
-      ...s,
-      percentage: getPercentage(s),
-      total: s.present + s.absent,
-    }));
-
-    const scheduledBySubject = subjects.map((s) => ({
-      name: s.name,
-      count: timetable.filter((entry) => entry.subject === s.name).length,
-    }));
-
-    const maxScheduled = Math.max(
-      ...scheduledBySubject.map((i) => i.count),
-      1
-    );
-
-    const scheduledDays = DAYS.map((day) => ({
-      day: day.slice(0, 3),
-      count: getDayEntries(day).length,
-    }));
-
-    const maxDaily = Math.max(
-      ...scheduledDays.map((i) => i.count),
-      1
-    );
-
-    const goal = Math.max(1, Number(settings.dailyStudyGoal) || 180);
-    const goalProgress = Math.min(
-      100,
-      (todayStudyMinutes / goal) * 100
-    );
-
-    const track = {
-      height: "12px",
-      background: "rgba(128,128,128,0.18)",
-      borderRadius: "999px",
-      overflow: "hidden",
-    };
-
-    const row = {
-      display: "flex",
-      justifyContent: "space-between",
-      gap: "12px",
-      marginBottom: "7px",
-    };
-
-    return (
-      <>
-        <div className="page-header">
-          <div>
-            <h1>Statistics</h1>
-            <p>See your attendance, study and timetable performance.</p>
-          </div>
-        </div>
-
-        <div className="stats-grid">
-          <div className="stat-card">
-            <span>Overall Attendance</span>
-            <strong>{overall}%</strong>
-          </div>
-          <div className="stat-card">
-            <span>Total Study Time</span>
-            <strong>{formatStudyTime(totalStudyMinutes)}</strong>
-          </div>
-          <div className="stat-card">
-            <span>This Week</span>
-            <strong>{formatStudyTime(weeklyStudyMinutes)}</strong>
-          </div>
-          <div className="stat-card">
-            <span>Study Streak</span>
-            <strong>🔥 {studyStreak}</strong>
-          </div>
-        </div>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,300px),1fr))",
-            gap: "20px",
-            marginTop: "20px",
-          }}
-        >
-          <div className="panel">
-            <div className="panel-header">
-              <div>
-                <h2>Today's Goal</h2>
-                <p>Focused study completed today.</p>
-              </div>
-            </div>
-
-            <div className="big-percentage">
-              {Math.round(goalProgress)}%
-            </div>
-
-            <div className="large-progress" style={{ marginTop: "14px" }}>
-              <div style={{ width: `${goalProgress}%` }} />
-            </div>
-
-            <p style={{ marginTop: "12px", opacity: 0.7 }}>
-              {formatStudyTime(todayStudyMinutes)} of{" "}
-              {formatStudyTime(goal)}
-            </p>
-          </div>
-
-          <div className="panel">
-            <div className="panel-header">
-              <div>
-                <h2>Study by Subject</h2>
-                <p>Your recorded focus time in the last 7 days.</p>
-              </div>
-            </div>
-
-            {weeklySubjectStudyTotals.map((item) => (
-              <div className="study-subject-row" key={item.name}>
-                <div className="study-subject-header">
-                  <span>{item.name}</span>
-                  <strong>{formatStudyTime(item.minutes)}</strong>
-                </div>
-                <div className="study-subject-bar">
-                  <div
-                    style={{
-                      width: `${
-                        (item.minutes / maxWeeklySubjectStudyMinutes) * 100
-                      }%`,
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="panel">
-            <div className="panel-header">
-              <div>
-                <h2>Attendance by Subject</h2>
-                <p>Your current attendance percentage.</p>
-              </div>
-            </div>
-
-            {subjectStats.length === 0 ? (
-              <p>No subjects available yet.</p>
-            ) : (
-              <div style={{ display: "grid", gap: "18px" }}>
-                {subjectStats.map((item) => (
-                  <div key={item.id}>
-                    <div style={row}>
-                      <strong>{item.name}</strong>
-                      <strong>{item.percentage}%</strong>
-                    </div>
-
-                    <div style={track}>
-                      <div
-                        style={{
-                          width: `${item.percentage}%`,
-                          height: "100%",
-                          background:
-                            item.percentage >= item.benchmark
-                              ? "#22c55e"
-                              : "#f59e0b",
-                          borderRadius: "999px",
-                          transition: "width .4s ease",
-                        }}
-                      />
-                    </div>
-
-                    <div
-                      style={{
-                        marginTop: "6px",
-                        fontSize: "12px",
-                        opacity: 0.65,
-                      }}
-                    >
-                      Target: {item.benchmark}%
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="panel">
-            <div className="panel-header">
-              <div>
-                <h2>Present vs Absent</h2>
-                <p>Class distribution for each subject.</p>
-              </div>
-            </div>
-
-            {subjectStats.length === 0 ? (
-              <p>No attendance data yet.</p>
-            ) : (
-              <div style={{ display: "grid", gap: "18px" }}>
-                {subjectStats.map((item) => {
-                  const presentWidth = item.total
-                    ? (item.present / item.total) * 100
-                    : 0;
-
-                  return (
-                    <div key={item.id}>
-                      <div style={row}>
-                        <strong>{item.name}</strong>
-                        <span style={{ fontSize: "12px", opacity: 0.7 }}>
-                          {item.present} present · {item.absent} absent
-                        </span>
-                      </div>
-
-                      <div
-                        style={{
-                          display: "flex",
-                          height: "14px",
-                          borderRadius: "999px",
-                          overflow: "hidden",
-                          background: "rgba(128,128,128,0.18)",
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: `${presentWidth}%`,
-                            background: "#22c55e",
-                          }}
-                        />
-                        <div style={{ flex: 1, background: "#ef4444" }} />
-                      </div>
-                    </div>
-                  );
-                })}
-
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "18px",
-                    fontSize: "13px",
-                    opacity: 0.75,
-                  }}
-                >
-                  <span>🟢 Present</span>
-                  <span>🔴 Absent</span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="panel">
-            <div className="panel-header">
-              <div>
-                <h2>Attendance vs Benchmark</h2>
-                <p>Compare your current percentage with your target.</p>
-              </div>
-            </div>
-
-            {subjectStats.length === 0 ? (
-              <p>No subjects available yet.</p>
-            ) : (
-              <div style={{ display: "grid", gap: "16px" }}>
-                {subjectStats.map((item) => (
-                  <div key={item.id}>
-                    <div style={{ ...row, marginBottom: "6px" }}>
-                      <strong>{item.name}</strong>
-                      <span>
-                        {item.percentage}% / {item.benchmark}%
-                      </span>
-                    </div>
-
-                    <div
-                      style={{
-                        position: "relative",
-                        height: "10px",
-                        borderRadius: "999px",
-                        background: "rgba(128,128,128,0.18)",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: `${item.percentage}%`,
-                          height: "100%",
-                          borderRadius: "999px",
-                          background:
-                            item.percentage >= item.benchmark
-                              ? "#22c55e"
-                              : "#f59e0b",
-                        }}
-                      />
-
-                      <div
-                        style={{
-                          position: "absolute",
-                          left: `${item.benchmark}%`,
-                          top: "-5px",
-                          width: "3px",
-                          height: "20px",
-                          background: "currentColor",
-                          borderRadius: "3px",
-                          opacity: 0.7,
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="panel">
-            <div className="panel-header">
-              <div>
-                <h2>Classes by Subject</h2>
-                <p>Weekly classes from your timetable.</p>
-              </div>
-            </div>
-
-            {timetable.length === 0 ? (
-              <p>No timetable classes added yet.</p>
-            ) : (
-              <div style={{ display: "grid", gap: "14px" }}>
-                {scheduledBySubject
-                  .filter((item) => item.count > 0)
-                  .map((item) => (
-                    <div key={item.name}>
-                      <div style={{ ...row, marginBottom: "6px" }}>
-                        <strong>{item.name}</strong>
-                        <span>{item.count}</span>
-                      </div>
-
-                      <div style={{ ...track, height: "10px" }}>
-                        <div
-                          style={{
-                            width: `${(item.count / maxScheduled) * 100}%`,
-                            height: "100%",
-                            background: "#6366f1",
-                            borderRadius: "999px",
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            )}
-          </div>
-
-          <div className="panel" style={{ gridColumn: "1 / -1" }}>
-            <div className="panel-header">
-              <div>
-                <h2>Weekly Class Distribution</h2>
-                <p>How your scheduled classes are spread across the week.</p>
-              </div>
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(6,minmax(0,1fr))",
-                gap: "14px",
-                alignItems: "end",
-                minHeight: "190px",
-              }}
-            >
-              {scheduledDays.map((item) => (
-                <div
-                  key={item.day}
-                  style={{
-                    height: "170px",
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "flex-end",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
-                  <strong>{item.count}</strong>
-                  <div
-                    style={{
-                      width: "min(44px,70%)",
-                      height: `${Math.max(
-                        item.count
-                          ? (item.count / maxDaily) * 120
-                          : 4,
-                        4
-                      )}px`,
-                      background: "#22d3ee",
-                      borderRadius: "10px 10px 4px 4px",
-                      transition: "height .4s ease",
-                    }}
-                  />
-                  <span style={{ fontSize: "12px", opacity: 0.7 }}>
-                    {item.day}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="panel" style={{ gridColumn: "1 / -1" }}>
-            <div className="panel-header">
-              <div>
-                <h2>Recent Study Sessions</h2>
-                <p>Your latest recorded focus sessions.</p>
-              </div>
-            </div>
-
-            {studySessions.length === 0 ? (
-              <p className="empty">No study sessions recorded yet.</p>
-            ) : (
-              <div className="study-history">
-                {[...studySessions]
-                  .slice(-10)
-                  .reverse()
-                  .map((session) => (
-                    <div className="study-history-row" key={session.id}>
-                      <div>
-                        <strong>{session.subject}</strong>
-                        <div className="study-history-date">
-                          {session.date}
-                        </div>
-                      </div>
-                      <div className="study-history-time">
-                        {formatStudyTime(session.duration)}
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </>
-    );
   }
 
   // =========================================================
@@ -2557,17 +933,112 @@ function App() {
         </button>
 
         <div key={page} className="page-transition">
-          {page === "dashboard" && Dashboard()}
-          {page === "attendance" && Attendance()}
-          {page === "syllabus" && Syllabus()}
-          {page === "timetable" && Timetable()}
-          {page === "statistics" && Statistics()}
+          {page === "dashboard" && (
+            <Dashboard
+              chatNotify={chatNotify}
+              clearStudyHistory={clearStudyHistory}
+              getOverallSyllabusProgress={getOverallSyllabusProgress}
+              maxWeeklySubjectStudyMinutes={maxWeeklySubjectStudyMinutes}
+              navigateTo={navigateTo}
+              overallAttendance={overallAttendance}
+              pomodoro={pomodoro}
+              sessionsToday={sessionsToday}
+              settings={settings}
+              studySessions={studySessions}
+              studyStreak={studyStreak}
+              subjects={subjects}
+              todayStudyMinutes={todayStudyMinutes}
+              todosApi={todosApi}
+              weeklyChart={weeklyChart}
+              weeklyStudyMinutes={weeklyStudyMinutes}
+              weeklySubjectStudyTotals={weeklySubjectStudyTotals}
+            />
+          )}
+          {page === "attendance" && (
+            <Attendance
+              addSubject={addSubject}
+              deleteSubject={deleteSubject}
+              getClassesCanMiss={getClassesCanMiss}
+              getClassesNeeded={getClassesNeeded}
+              getPercentage={getPercentage}
+              markAttendance={markAttendance}
+              newBenchmark={newBenchmark}
+              newName={newName}
+              setNewBenchmark={setNewBenchmark}
+              setNewName={setNewName}
+              setShowAdd={setShowAdd}
+              showAdd={showAdd}
+              subjects={subjects}
+              updateBenchmark={updateBenchmark}
+            />
+          )}
+          {page === "syllabus" && (
+            <Syllabus
+              addManualTopic={addManualTopic}
+              expandedUnits={expandedUnits}
+              getOverallSyllabusProgress={getOverallSyllabusProgress}
+              getSubjectProgress={getSubjectProgress}
+              handleWholePdfUpload={handleWholePdfUpload}
+              newTopic={newTopic}
+              renderSemesterSubjects={renderSemesterSubjects}
+              selectedSyllabusSubject={selectedSyllabusSubject}
+              setNewTopic={setNewTopic}
+              syllabus={syllabus}
+              toggleTopic={toggleTopic}
+              toggleUnit={toggleUnit}
+              uploadingPdf={uploadingPdf}
+            />
+          )}
+          {page === "timetable" && (
+            <Timetable
+              DAYS={DAYS}
+              deleteTimetableEntry={deleteTimetableEntry}
+              editingTimetableId={editingTimetableId}
+              getDayEntries={getDayEntries}
+              openTimetableForm={openTimetableForm}
+              resetTimetableForm={resetTimetableForm}
+              saveTimetableEntry={saveTimetableEntry}
+              setShowTimetableForm={setShowTimetableForm}
+              setTimetableForm={setTimetableForm}
+              showTimetableForm={showTimetableForm}
+              subjects={subjects}
+              timetable={timetable}
+              timetableForm={timetableForm}
+            />
+          )}
+          {page === "statistics" && (
+            <Statistics
+              DAYS={DAYS}
+              getDayEntries={getDayEntries}
+              getPercentage={getPercentage}
+              maxWeeklySubjectStudyMinutes={maxWeeklySubjectStudyMinutes}
+              settings={settings}
+              studySessions={studySessions}
+              studyStreak={studyStreak}
+              subjects={subjects}
+              timetable={timetable}
+              todayStudyMinutes={todayStudyMinutes}
+              totalStudyMinutes={totalStudyMinutes}
+              weeklyStudyMinutes={weeklyStudyMinutes}
+              weeklySubjectStudyTotals={weeklySubjectStudyTotals}
+            />
+          )}
           {page === "leaderboard" && <Leaderboard />}
           {page === "friends" && <Friends />}
           {page === "groups" && (
   <Groups notify={chatNotify} pomodoro={pomodoro} />
 )}
-          {page === "settings" && Settings()}
+          {page === "settings" && (
+            <Settings
+              exportBackup={exportBackup}
+              handleBackupImport={handleBackupImport}
+              importingBackup={importingBackup}
+              resetAllData={resetAllData}
+              setNewBenchmark={setNewBenchmark}
+              settings={settings}
+              updateSetting={updateSetting}
+            />
+          )}
         </div>
       </main>
        <NudgeHost soundOn={chatNotify.soundOn} />
