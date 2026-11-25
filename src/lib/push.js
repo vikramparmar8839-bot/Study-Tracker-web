@@ -82,9 +82,18 @@ export async function disablePush() {
 // Call next to the live nudge. The server builds the title from the sender's profile.
 export async function sendPush(toUserId, { message = '', groupName = '' } = {}) {
   try {
-    const { error } = await supabase.functions.invoke('send-push', {
-      body: { to_user_id: toUserId, message, group_name: groupName },
-    });
+    const body = { to_user_id: toUserId, message, group_name: groupName };
+    let { error } = await supabase.functions.invoke('send-push', { body });
+
+    // A 401 usually means the access token expired (e.g. the tab was idle and the
+    // background refresh was throttled). Refresh the session and try once more.
+    if (error?.context?.status === 401) {
+      const { error: refreshError } = await supabase.auth.refreshSession();
+      if (!refreshError) {
+        ({ error } = await supabase.functions.invoke('send-push', { body }));
+      }
+    }
+
     if (error) {
       // error.context is the raw Response; its body says whether the gateway or your function rejected it.
       let body = '';
