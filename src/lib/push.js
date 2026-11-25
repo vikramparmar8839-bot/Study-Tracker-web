@@ -39,12 +39,27 @@ export async function enablePush() {
   const reg = await navigator.serviceWorker.register('/sw.js');
   await navigator.serviceWorker.ready;
 
-  const sub =
-    (await reg.pushManager.getSubscription()) ||
-    (await reg.pushManager.subscribe({
+  const appKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+
+  // An existing subscription is only valid for the VAPID key it was created with.
+  // If the key changed since, drop it and subscribe again with the current key.
+  let sub = await reg.pushManager.getSubscription();
+  if (sub) {
+    const current = sub.options?.applicationServerKey;
+    const same = current && new Uint8Array(current).toString() === appKey.toString();
+    if (!same) {
+      // Remove the stale row first so the old endpoint doesn't linger in the table.
+      await supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
+      await sub.unsubscribe();
+      sub = null;
+    }
+  }
+  if (!sub) {
+    sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-    }));
+      applicationServerKey: appKey,
+    });
+  }
 
   const json = sub.toJSON();
   // RPC (see push_subscriptions.sql) so a device can switch between accounts cleanly.
@@ -70,7 +85,12 @@ export async function sendPush(toUserId, { message = '', groupName = '' } = {}) 
     const { error } = await supabase.functions.invoke('send-push', {
       body: { to_user_id: toUserId, message, group_name: groupName },
     });
-    if (error) console.warn('push failed', error);
+    if (error) {
+      // error.context is the raw Response; its body says whether the gateway or your function rejected it.
+      let body = '';
+      try { body = await error.context?.text?.(); } catch { /* ignore */ }
+      console.warn('push failed', error, body);
+    }
   } catch (e) {
     console.warn('push failed', e);
   }
