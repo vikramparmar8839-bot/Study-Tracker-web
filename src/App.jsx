@@ -5,6 +5,7 @@ import PomodoroTimer, {
   POMODORO_STORAGE_KEY,
 } from "./PomodoroTimer";
 import "./index.css";
+import "./todo.css";
 import liquidGlassCss from "./liquid-glass.css?inline";
 import { useAuth } from "./context/AuthContext";
 import Leaderboard from "./pages/Leaderboard";
@@ -184,6 +185,38 @@ function App() {
     }
   });
 
+  const [todos, setTodos] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("studytrack-todos") || "[]");
+      return Array.isArray(saved) ? saved : [];
+    } catch {
+      return [];
+    }
+  });
+  const [newTodo, setNewTodo] = useState("");
+
+  function addTodo() {
+    const text = newTodo.trim();
+    if (!text) return;
+    setTodos((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), text, done: false },
+    ]);
+    setNewTodo("");
+  }
+
+  function toggleTodo(id) {
+    setTodos((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t))
+    );
+  }
+
+  function deleteTodo(id) {
+    setTodos((prev) => prev.filter((t) => t.id !== id));
+  }
+
+  const todosDone = todos.filter((t) => t.done).length;
+
   // Called by the Pomodoro timer whenever a focus session ends
   function logFocusSession({ subject, minutes }) {
     setStudySessions((sessions) => [
@@ -230,6 +263,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem("studytrack-sessions", JSON.stringify(studySessions));
   }, [studySessions]);
+
+  useEffect(() => {
+    localStorage.setItem("studytrack-todos", JSON.stringify(todos));
+  }, [todos]);
 
   // =========================================================
   // ATTENDANCE
@@ -936,44 +973,84 @@ function App() {
             )}
           </section>
 
-          <section className="panel">
+          <section className="panel todo-panel">
             <div className="panel-header">
               <div>
-                <h2>Achievements</h2>
-                <p>Your StudyTrack milestones.</p>
+                <h2>To-do List</h2>
+                <p>
+                  {todos.length
+                    ? `${todosDone} of ${todos.length} done`
+                    : "Your personal tasks."}
+                </p>
               </div>
+              {todosDone > 0 && (
+                <button
+                  className="danger-text"
+                  onClick={() => setTodos((prev) => prev.filter((t) => !t.done))}
+                >
+                  Clear done
+                </button>
+              )}
             </div>
 
-            <div className="achievement-grid">
-              <div className={`achievement ${totalStudyMinutes < 60 ? "locked" : ""}`}>
-                <span className="achievement-icon">⏱️</span>
-                <strong>First Hour</strong>
+            {todos.length > 0 && (
+              <div className="todo-progress" aria-hidden="true">
+                <div style={{ width: `${(todosDone / todos.length) * 100}%` }} />
               </div>
-              <div className={`achievement ${studyStreak < 3 ? "locked" : ""}`}>
-                <span className="achievement-icon">🔥</span>
-                <strong>3 Day Streak</strong>
-              </div>
-              <div className={`achievement ${totalStudyMinutes < 600 ? "locked" : ""}`}>
-                <span className="achievement-icon">📚</span>
-                <strong>10 Hours</strong>
-              </div>
-              <div className={`achievement ${studyStreak < 7 ? "locked" : ""}`}>
-                <span className="achievement-icon">🏆</span>
-                <strong>7 Day Streak</strong>
-              </div>
-              <div className={`achievement ${totalStudyMinutes < 3000 ? "locked" : ""}`}>
-                <span className="achievement-icon">🚀</span>
-                <strong>50 Hours</strong>
-              </div>
-              <div
-                className={`achievement ${
-                  todayStudyMinutes < goal ? "locked" : ""
-                }`}
-              >
-                <span className="achievement-icon">🎯</span>
-                <strong>Daily Goal</strong>
-              </div>
+            )}
+
+            <div className="todo-add">
+              <input
+                type="text"
+                placeholder="Add a task…"
+                value={newTodo}
+                onChange={(e) => setNewTodo(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addTodo()}
+              />
+              <button className="primary-button" onClick={addTodo}>
+                Add
+              </button>
             </div>
+
+            {todos.length === 0 ? (
+              <div className="todo-empty">
+                <span aria-hidden="true">📝</span>
+                <p>Nothing to do yet</p>
+                <small>Add a task above to get started.</small>
+              </div>
+            ) : (
+              <ul className="todo-list">
+                {[...todos]
+                  .sort((a, b) => Number(a.done) - Number(b.done))
+                  .map((t) => (
+                    <li key={t.id} className={`todo-item ${t.done ? "done" : ""}`}>
+                      <button
+                        type="button"
+                        role="checkbox"
+                        aria-checked={t.done}
+                        aria-label={`Mark "${t.text}" as ${t.done ? "not done" : "done"}`}
+                        className="todo-check"
+                        onClick={() => toggleTodo(t.id)}
+                      >
+                        <svg viewBox="0 0 16 16" aria-hidden="true">
+                          <path d="M3.5 8.5l3 3 6-7" />
+                        </svg>
+                      </button>
+                      <span className="todo-text" onClick={() => toggleTodo(t.id)}>
+                        {t.text}
+                      </span>
+                      <button
+                        type="button"
+                        className="todo-delete"
+                        aria-label={`Delete "${t.text}"`}
+                        onClick={() => deleteTodo(t.id)}
+                      >
+                        ✕
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+            )}
           </section>
         </div>
 
@@ -1588,6 +1665,7 @@ function App() {
       timetable,
       settings,
       studySessions,
+      todos,
       pomodoro: pomodoro.settings,
     };
 
@@ -1635,6 +1713,7 @@ function App() {
         setStudySessions(
           Array.isArray(backup.studySessions) ? backup.studySessions : []
         );
+        setTodos(Array.isArray(backup.todos) ? backup.todos : []);
         pomodoro.applySettings(backup.pomodoro);
         setPage("dashboard");
 
@@ -1662,6 +1741,7 @@ function App() {
     setTimetable([]);
     setSettings(DEFAULT_SETTINGS);
     setStudySessions([]);
+    setTodos([]);
     setNewBenchmark(75);
     pomodoro.resetAll();
     setPage("dashboard");
@@ -1671,6 +1751,7 @@ function App() {
     localStorage.removeItem("studytrack-timetable");
     localStorage.removeItem("studytrack-settings");
     localStorage.removeItem("studytrack-sessions");
+    localStorage.removeItem("studytrack-todos");
     localStorage.removeItem(POMODORO_STORAGE_KEY);
 
     alert("StudyTrack has been reset.");
