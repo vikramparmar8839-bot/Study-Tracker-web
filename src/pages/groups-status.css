@@ -269,3 +269,70 @@
 /* ---------- stickman avatar ---------- */
 .st-avatar { color: #fff; }
 .st-avatar svg { display: block; width: 100%; height: 100%; }
+
+/* ---------- mobile: name gets its own column, time + Nudge stack on the right ---------- */
+@media (max-width: 600px) {
+  .st-board.compact li {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    column-gap: 8px;
+    row-gap: 4px;
+    align-items: center;
+    padding: 10px 10px;
+  }
+
+  .st-board.compact li > .st-rank {
+    grid-column: 1; grid-row: 1 / span 2;
+    min-width: 30px; height: 30px; padding: 0 6px;
+  }
+  .st-board.compact li > .st-avatar {
+    grid-column: 2; grid-row: 1 / span 2;
+    width: 32px; height: 32px;
+  }
+
+  /* name above, status chip below; can never be covered by time / Nudge */
+  .st-board.compact li > .st-who {
+    grid-column: 3; grid-row: 1 / span 2;
+    min-width: 0;
+    flex: none;
+    flex-direction: column;
+    align-items: flex-start;
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+  .st-board.compact li > .st-who strong {
+    max-width: 100%;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+    line-height: 1.2;
+  }
+  .st-board.compact li > .st-who .st-status {
+    max-width: 100%;
+    padding: 2px 8px;
+    gap: 5px;
+    font-size: 0.7rem;
+  }
+
+  /* time on top, Nudge below it */
+  .st-board.compact li > .st-time {
+    grid-column: 4; grid-row: 1;
+    align-self: end;
+    justify-self: end;
+    margin: 0;
+    white-space: nowrap;
+  }
+  .st-board.compact li > .st-nudge {
+    grid-column: 4; grid-row: 2;
+    align-self: start;
+    justify-self: end;
+    margin-left: 0 !important;
+  }
+
+  /* your own row has no Nudge: centre the time instead */
+  .st-board.compact li:not(:has(.st-nudge)) > .st-time {
+    grid-row: 1 / span 2;
+    align-self: center;
+  }
+}

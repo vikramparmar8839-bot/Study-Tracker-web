@@ -57,6 +57,7 @@ export function NudgeButton({ toId, toName, myName, groupName }) {
   return (
     <span
       ref={wrapRef}
+      className="st-nudge"
       style={{ position: 'relative', display: 'inline-flex', flexShrink: 0, marginLeft: 8 }}
     >
       <button
