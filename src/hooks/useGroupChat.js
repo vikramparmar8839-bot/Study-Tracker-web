@@ -71,6 +71,12 @@ export function useGroupChat(groupId) {
           add(p.new);
           clearTyping(p.new.user_id); // their message arrived, so they are done typing
         })
+      .subscribe();
+
+    // typing signals get their OWN channel. Sharing the "group-chat-<id>" topic with another
+    // subscriber (e.g. the app-wide chat notifier) makes Supabase drop one of the two listeners.
+    const typingChannel = supabase
+      .channel(`group-typing-${groupId}`, { config: { broadcast: { self: false } } })
       .on('broadcast', { event: 'typing' }, ({ payload }) => {
         if (!active || !payload?.user_id || payload.user_id === myId) return;
         const uid = payload.user_id;
@@ -78,9 +84,14 @@ export function useGroupChat(groupId) {
         clearTimeout(timersRef.current[uid]);
         timersRef.current[uid] = setTimeout(() => clearTyping(uid), TYPING_TTL_MS);
       })
-      .subscribe((status) => { readyRef.current = status === 'SUBSCRIBED'; });
+      .subscribe((status, err) => {
+        readyRef.current = status === 'SUBSCRIBED';
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[typing] channel not available:', status, err?.message || '');
+        }
+      });
 
-    channelRef.current = channel;
+    channelRef.current = typingChannel;
 
     return () => {
       active = false;
@@ -89,6 +100,7 @@ export function useGroupChat(groupId) {
       Object.values(timersRef.current).forEach(clearTimeout);
       timersRef.current = {};
       supabase.removeChannel(channel);
+      supabase.removeChannel(typingChannel);
     };
   }, [groupId, add, myId]);
 
