@@ -9,6 +9,7 @@ import Groups from "./pages/Groups";
 import { useChatNotifications } from "./hooks/useChatNotifications";
 import { useLastSeenHeartbeat } from "./hooks/useLastSeen";
 import { NudgeHost } from "./pages/Nudge";
+import { syncPush, unlinkPush } from "./lib/push";
 import Dashboard from "./pages/Dashboard";
 import Statistics from "./pages/Statistics";
 import Settings from "./pages/Settings";
@@ -41,9 +42,26 @@ try {
 }
 
 function App() {
-  const { profile, signOut, updateProfile } = useAuth();
+  const { user, profile, signOut, updateProfile } = useAuth();
   const chatNotify = useChatNotifications();
   useLastSeenHeartbeat(); // keeps "online" status fresh on every page, not just Groups
+
+  // Re-link this device's push subscription to whoever is signed in: on load, on sign-in
+  // and whenever the app returns to the foreground. No permission prompt, no button needed.
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    const run = () => { syncPush(user.id); };
+    run();
+    const onVisible = () => { if (document.visibilityState === "visible") run(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [user?.id]);
+
+  // stop this device getting the old account's pushes, then sign out
+  async function handleSignOut() {
+    try { await unlinkPush(); } catch { /* signing out matters more */ }
+    signOut();
+  }
   const [page, setPage] = useState("dashboard");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -913,7 +931,7 @@ function App() {
             <button type="button" className="secondary-button" onClick={changeUsername}>
               Change username
             </button>
-            <button type="button" className="secondary-button" onClick={signOut}>
+            <button type="button" className="secondary-button" onClick={handleSignOut}>
               Sign out
             </button>
           </div>

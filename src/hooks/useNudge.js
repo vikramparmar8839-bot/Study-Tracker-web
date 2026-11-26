@@ -217,22 +217,40 @@ export function useNudgeReceiver({ soundOn = true, onNudge }) {
     };
 
     const join = () => {
-      if (stopped) return;
+      if (stopped || ch) return;
       const c = supabase.channel(`nudge:${myId}`);
       ch = c;
       c.on('broadcast', { event: 'nudge' }, ({ payload }) => handle(payload)).subscribe((status) => {
-        if (['CHANNEL_ERROR', 'TIMED_OUT'].includes(status) && ch === c && !stopped) {
-          supabase.removeChannel(c);
-          ch = null;
-          timer = setTimeout(join, 5000);
-        }
+        // a dropped connection (phone slept, network blip) must be re-joined, not just errors
+        if (['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'].includes(status)) rejoin(c, 3000);
       });
     };
+
+    const rejoin = (c, delay) => {
+      if (stopped || ch !== c) return; // an old channel, or one we closed ourselves
+      ch = null;                        // clear first: removeChannel() fires CLOSED again
+      supabase.removeChannel(c);
+      clearTimeout(timer);
+      timer = setTimeout(join, delay);
+    };
+
+    // coming back to the app / network: make sure the channel is really alive
+    const check = () => {
+      if (stopped) return;
+      if (!ch) { clearTimeout(timer); join(); return; }
+      if (['closed', 'errored'].includes(ch.state)) rejoin(ch, 0);
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+
     join();
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', check);
 
     return () => {
       stopped = true;
       clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', check);
       if (ch) supabase.removeChannel(ch);
     };
   }, [myId]);

@@ -1,4 +1,8 @@
 // Service worker: receives pushes while StudyTrack is closed or in the background.
+// Activate a new version right away instead of waiting for every tab to close.
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
+
 self.addEventListener('push', (event) => {
   let data = {};
   try {
