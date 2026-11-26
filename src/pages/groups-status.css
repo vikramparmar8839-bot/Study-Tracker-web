@@ -310,9 +310,24 @@
   }
   .st-board.compact li > .st-who .st-status {
     max-width: 100%;
-    padding: 2px 8px;
+    padding: 3px 9px;
     gap: 5px;
     font-size: 0.7rem;
+    line-height: 1.25;
+    white-space: normal;        /* let the text wrap instead of escaping the pill */
+    overflow-wrap: anywhere;
+    border-radius: 12px;        /* a 999px pill looks odd when it wraps to 2 lines */
+    align-items: flex-start;
+  }
+  .st-board.compact li > .st-who .st-status::before {
+    margin-top: 4px;            /* keep the dot aligned with the first line */
+  }
+
+  /* give the name column more room by making Nudge slimmer */
+  .st-board.compact li > .st-nudge {
+    padding: 5px 10px !important;
+    font-size: 0.8rem !important;
+    min-height: 0 !important;
   }
 
   /* time on top, Nudge below it */
