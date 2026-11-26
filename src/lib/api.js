@@ -13,8 +13,8 @@ export const SESSION_SAVED_EVENT = 'studytrack-session-saved';
 const PENDING_KEY = 'studytrack-pending-sessions';
 
 /** Save a finished Focus session. Server recomputes duration and rejects cheating. */
-export const saveSession = ({ id, startedAt, endedAt, subject = null, groupId = null }) =>
-  supabase
+export async function saveSession({ id, startedAt, endedAt, subject = null, groupId = null }) {
+  const { data, error } = await supabase
     .from('study_sessions')
     .insert({
       ...(id ? { id } : {}),
@@ -24,8 +24,13 @@ export const saveSession = ({ id, startedAt, endedAt, subject = null, groupId = 
       group_id: groupId,
     })
     .select()
-    .single()
-    .then(unwrap);
+    .single();
+  if (error) {
+    if (error.code === '23505') return null; // the server already saved this run (same id): nothing to do
+    throw new Error(error.message);
+  }
+  return data;
+}
 
 /* ---- offline-safe saving for the Pomodoro timer ---- */
 
@@ -53,11 +58,11 @@ async function trySend(entry) {
  * Call when a Focus session finishes. Safe to call when logged out or offline:
  * the session is kept on the device and sent on the next login / page load.
  */
-export async function saveFocusSession({ subject = '', seconds }) {
+export async function saveFocusSession({ subject = '', seconds, id = null }) {
   if (!seconds || seconds < 60) return;
   const endedAt = Date.now();
   const entry = {
-    id: crypto.randomUUID(),
+    id: id || crypto.randomUUID(),
     startedAt: endedAt - seconds * 1000,
     endedAt,
     subject,
@@ -172,7 +177,7 @@ export const getServerOffsetMs = async () => {
 
 /* ---------------- per-member live status ---------------- */
 
-export const memberStatusSet = (groupId, state, paused, remainingSec, totalSec) =>
+export const memberStatusSet = (groupId, state, paused, remainingSec, totalSec, runId = null, creditGroup = null, subject = null) =>
   supabase
     .rpc('member_status_set', {
       p_group: groupId,
@@ -180,6 +185,9 @@ export const memberStatusSet = (groupId, state, paused, remainingSec, totalSec) 
       p_paused: paused,
       p_remaining_sec: remainingSec,
       p_total_sec: totalSec,
+      p_run_id: runId,
+      p_credit_group: creditGroup,
+      p_subject: subject || null,
     })
     .then(unwrap);
 

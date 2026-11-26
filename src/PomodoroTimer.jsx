@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
+ import { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import { saveFocusSession, saveSession, memberStatusSet, listMyGroups, SESSION_SAVED_EVENT } from "./lib/api"; // adjust the path if this file lives elsewhere
 import { playAlarm, unlockAlarm } from "./lib/alarm"; // adjust the path if this file lives elsewhere
 
@@ -147,6 +147,7 @@ function beep() {
 ================================================================ */
 
 const RUN_KEY = "studytrack-pomodoro-run";
+const PAUSE_LIMIT_MS = 60 * 60 * 1000; // a timer left paused for 1 hour is wrapped up automatically
 
 /* read the timer that was running before the page was refreshed */
 function restoreRun() {
@@ -159,6 +160,7 @@ function restoreRun() {
     phase: s.phase,
     round: Number(s.round) || 0,
     subject: s.subject || "",
+    runId: s.runId || "",
     running: false,
     remaining: settings[s.phase] * 60,
     endsAt: 0,
@@ -179,11 +181,22 @@ function restoreRun() {
       phase: next,
       round: cycleEnd ? 0 : done,
       remaining: settings[next] * 60,
-      finished: { secs: Number(s.total) || settings.focus * 60, endedAt: s.endsAt },
+      finished: { secs: Number(s.total) || settings.focus * 60, endedAt: s.endsAt, runId: s.runId || "" },
     };
   }
 
-  if (s.locked) return { ...base, remaining: Math.max(1, Number(s.remaining) || base.remaining) }; // paused
+  if (s.locked) {
+    const left = Math.max(1, Number(s.remaining) || base.remaining); // paused
+    const savedAt = Number(s.savedAt) || Date.now();
+    if (Date.now() - savedAt > PAUSE_LIMIT_MS) {
+      /* paused for over an hour while the page was closed: log what was studied, then reset */
+      const studied = s.phase === "focus" ? Math.max(0, (Number(s.total) || 0) - left) : 0;
+      return studied >= 60
+        ? { ...base, finished: { secs: studied, endedAt: savedAt, runId: s.runId || "" } }
+        : base;
+    }
+    return { ...base, remaining: left };
+  }
   return base;
 }
 
@@ -219,6 +232,12 @@ export function usePomodoro({ subjects = [], onSessionComplete } = {}) {
   const progress = total ? (elapsed / total) * 100 : 0;
   remainingRef.current = remaining;
 
+  /* every focus/break run gets its own id: the server saves a finished run under this id, and the
+     browser uses the same id, so a session is never counted twice */
+  const runIdRef = useRef(restored?.runId || "");
+  const wasLockedRef = useRef(locked);
+  const lastPhaseRef = useRef(phase);
+
   /* drop a subject that was deleted */
   useEffect(() => {
     if (subject && !subjectNames.includes(subject)) setSubject("");
@@ -235,9 +254,20 @@ export function usePomodoro({ subjects = [], onSessionComplete } = {}) {
 
   /* remember the running timer so a refresh doesn't lose it */
   useEffect(() => {
+    if (locked) {
+      if (!runIdRef.current || !wasLockedRef.current || lastPhaseRef.current !== phase) {
+        runIdRef.current = crypto.randomUUID(); // a new run has started
+      }
+    } else {
+      runIdRef.current = "";
+    }
+    wasLockedRef.current = locked;
+    lastPhaseRef.current = phase;
     try {
       localStorage.setItem(RUN_KEY, JSON.stringify({
         phase, round, subject, running, locked, total,
+        runId: runIdRef.current,
+        savedAt: Date.now(),
         endsAt: running ? endRef.current : 0,
         remaining: running ? 0 : remaining,
       }));
@@ -254,6 +284,7 @@ export function usePomodoro({ subjects = [], onSessionComplete } = {}) {
     onSessionComplete?.({ subject: restored.subject, minutes: Math.round(f.secs / 60) });
     updatePetStore((c) => addStudy(c, f.secs));
     saveSession({
+      id: f.runId || undefined,
       startedAt: f.endedAt - f.secs * 1000,
       endedAt: f.endedAt,
       subject: restored.subject || null,
@@ -295,7 +326,10 @@ export function usePomodoro({ subjects = [], onSessionComplete } = {}) {
       .then((list) =>
         Promise.all(
           list.map((g) =>
-            memberStatusSet(g.id, a.state, a.paused, a.state === "idle" ? 0 : remainingRef.current, a.total).catch(() => {}),
+            memberStatusSet(
+              g.id, a.state, a.paused, a.state === "idle" ? 0 : remainingRef.current, a.total,
+              a.state === "idle" ? null : a.runId || null, a.creditGroup, a.subject,
+            ).catch(() => {}),
           ),
         ),
       )
@@ -307,9 +341,12 @@ export function usePomodoro({ subjects = [], onSessionComplete } = {}) {
       state: !locked ? "idle" : phase === "focus" ? "focus" : "break",
       paused: locked && !running,
       total,
+      runId: runIdRef.current,
+      creditGroup: groupId || null, // the group that gets the study time (server saves it if the tab is closed)
+      subject: subject || null,
     };
     pushStatusToAllGroups();
-  }, [running, locked, phase, total]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [running, locked, phase, total, groupId, subject]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* heartbeat: keeps me from going stale, and also covers groups I join mid-session */
   useEffect(() => {
@@ -341,14 +378,15 @@ export function usePomodoro({ subjects = [], onSessionComplete } = {}) {
 
   /* with a group attached the time counts on the group board (and in my own stats); otherwise personal only */
   function logSession(secs) {
+    const id = runIdRef.current || undefined; // same id the server uses, so it can never be saved twice
     if (groupId) {
       if (secs < 60) return; // under a minute does not count for a group
       const endedAt = Date.now();
-      saveSession({ startedAt: endedAt - secs * 1000, endedAt, groupId })
+      saveSession({ id, startedAt: endedAt - secs * 1000, endedAt, groupId })
         .then(() => window.dispatchEvent(new Event(SESSION_SAVED_EVENT)))
         .catch(console.error);
     } else {
-      saveFocusSession({ subject, seconds: secs }).catch(console.error); // backend
+      saveFocusSession({ subject, seconds: secs, id }).catch(console.error); // backend
     }
   }
 
@@ -407,6 +445,18 @@ export function usePomodoro({ subjects = [], onSessionComplete } = {}) {
     setRunning(false);
     setRemaining(total);
   }
+
+  /* a timer left paused for an hour is wrapped up: time studied so far is logged and the timer resets */
+  const autoFinishRef = useRef(() => {});
+  autoFinishRef.current = () => {
+    if (phase === "focus" && elapsed >= 60) finishEarly();
+    else { setRunning(false); setRemaining(total); }
+  };
+  useEffect(() => {
+    if (!locked || running) return undefined;
+    const id = setTimeout(() => autoFinishRef.current(), PAUSE_LIMIT_MS);
+    return () => clearTimeout(id);
+  }, [locked, running]);
 
   function applyPreset(key) {
     const { label, ...values } = PRESETS[key]; // eslint-disable-line no-unused-vars

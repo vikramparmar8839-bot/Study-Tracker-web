@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { getServerOffsetMs, listMemberStatuses } from '../lib/api';
 
-const STALE_MS = 180_000; // no heartbeat for 3 min -> treat as offline/idle
+const PAUSE_STALE_MS = 3_600_000; // a PAUSED timer with no sign of life for 1 hour -> idle
+/* a RUNNING timer needs no heartbeat: it stays live until its server-side ends_at passes,
+   even if the tab is closed or frozen in the background */
 
 /**
  * Live status of every member in a group.
@@ -67,11 +69,12 @@ export function useGroupPresence(groupId) {
     const serverNow = now + offsetRef.current;
     const out = {};
     for (const [uid, r] of Object.entries(rows)) {
-      const fresh = serverNow - Date.parse(r.updated_at) < STALE_MS;
       const remaining = r.paused
         ? r.remaining_sec
         : Math.max(0, Math.ceil((Date.parse(r.ends_at) - serverNow) / 1000));
-      const live = fresh && r.state !== 'idle' && (r.paused || remaining > 0);
+      const live = r.state !== 'idle' && (r.paused
+        ? serverNow - Date.parse(r.updated_at) < PAUSE_STALE_MS
+        : remaining > 0);
       out[uid] = live
         ? { state: r.state, paused: r.paused, remaining }
         : { state: 'idle', paused: false, remaining: 0 };
