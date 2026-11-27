@@ -16,7 +16,6 @@
   :root {
     --m-gap: 12px;
     --m-side: 14px;
-    --m-topbar: 48px;
     --m-nav: 64px;
   }
 
@@ -25,42 +24,10 @@
   .sidebar-overlay,
   .mobile-menu-button { display: none !important; }
 
-  /* ---------- 1. Slim top bar (content scrolls underneath) ---------- */
-  .mobile-topbar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 40;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    height: calc(var(--m-topbar) + env(safe-area-inset-top));
-    padding: env(safe-area-inset-top) var(--m-side) 0;
-    background: color-mix(in srgb, var(--bg) 82%, transparent);
-    -webkit-backdrop-filter: blur(14px);
-    backdrop-filter: blur(14px);
-    border-bottom: 1px solid var(--border);
-    font-weight: 700;
-    font-size: 16px;
-    letter-spacing: -0.01em;
-  }
-  .mobile-topbar-logo {
-    width: 28px;
-    height: 28px;
-    display: grid;
-    place-items: center;
-    border-radius: 9px;
-    background: linear-gradient(135deg, var(--accent-light), var(--accent-strong));
-    color: #fff;
-    font-size: 14px;
-    font-weight: 800;
-  }
-
-  /* ---------- 6. Same side margin everywhere, room for both bars ---------- */
+  /* ---------- 6. Same side margin everywhere, room for the bottom bar ---------- */
   .app-shell .main {
     padding:
-      calc(var(--m-topbar) + env(safe-area-inset-top) + var(--m-gap))
+      calc(env(safe-area-inset-top) + var(--m-gap))
       var(--m-side)
       calc(var(--m-nav) + env(safe-area-inset-bottom) + 20px);
   }
