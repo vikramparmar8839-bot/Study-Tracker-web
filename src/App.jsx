@@ -892,12 +892,13 @@ function App() {
   // Mobile bottom bar: the four most-used pages, everything else under "More"
   const MOBILE_TABS = [
     ["dashboard", "🏠", "Home"],
-    ["attendance", "📊", "Attendance"],
+    ["groups", "🤝", "Groups"],
     ["syllabus", "📚", "Syllabus"],
     ["timetable", "🗓️", "Timetable"],
   ];
-  const MORE_KEYS = ["statistics", "leaderboard", "friends", "groups", "settings"];
-  const moreItems = NAV.filter(([key]) => MORE_KEYS.includes(key));
+  const MORE_KEYS = ["statistics", "leaderboard", "friends", "attendance", "settings"];
+  // keeps the "More" menu in the same order as MORE_KEYS
+  const moreItems = MORE_KEYS.map((key) => NAV.find(([navKey]) => navKey === key));
   const moreActive = MORE_KEYS.includes(page);
   const pageTitle =
     NAV.find(([key]) => key === page)?.[1].replace(/^\S+\s/, "") || "StudyTrack";
@@ -1137,7 +1138,10 @@ function App() {
             className={page === key && !moreOpen ? "active" : ""}
             onClick={() => navigateTo(key)}
           >
-            <span className="bottom-nav-icon">{icon}</span>
+            <span className="bottom-nav-icon">
+              {icon}
+              {key === "groups" && chatNotify.total > 0 && <i className="bottom-nav-dot" />}
+            </span>
             <span className="bottom-nav-label">{label}</span>
           </button>
         ))}
@@ -1149,7 +1153,6 @@ function App() {
         >
           <span className="bottom-nav-icon">
             ☰
-            {chatNotify.total > 0 && <i className="bottom-nav-dot" />}
           </span>
           <span className="bottom-nav-label">More</span>
         </button>
