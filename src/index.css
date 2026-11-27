@@ -2852,3 +2852,81 @@ body {
   /* 6. Keep the hamburger clear of the notch / status bar */
   .mobile-menu-button { top: calc(12px + env(safe-area-inset-top)); }
 }
+
+/* =========================================================
+   SIDEBAR ACCOUNT BUTTONS (Change username / Sign out)
+   Compact, translucent glass pills. Uses .sidebar prefix so
+   they beat the generic button / .secondary-button rules.
+   Named "--signout" (not "danger") on purpose: the global
+   button[class*="danger"] rule would otherwise override it.
+   ========================================================= */
+.sidebar .account-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.sidebar .account-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.04) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  backdrop-filter: blur(14px) saturate(160%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.18),
+    0 4px 14px rgba(0, 0, 0, 0.22);
+  transition: background 0.18s ease, border-color 0.18s ease,
+              transform 0.12s ease, color 0.18s ease;
+}
+.sidebar .account-btn svg { opacity: 0.8; flex-shrink: 0; }
+
+.sidebar .account-btn:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.07) 100%);
+  border-color: rgba(255, 255, 255, 0.26);
+  transform: translateY(-1px);
+}
+.sidebar .account-btn:active { transform: scale(0.98); }
+.sidebar .account-btn:focus-visible {
+  outline: 2px solid rgba(255, 170, 80, 0.8);
+  outline-offset: 2px;
+}
+
+/* Sign out: red-tinted glass */
+.sidebar .account-btn--signout {
+  color: #ffb4b4;
+  background: linear-gradient(180deg, rgba(255, 90, 100, 0.2) 0%, rgba(255, 90, 100, 0.06) 100%);
+  border-color: rgba(255, 110, 120, 0.3);
+}
+.sidebar .account-btn--signout:hover {
+  color: #ffd0d0;
+  background: linear-gradient(180deg, rgba(255, 90, 100, 0.32) 0%, rgba(255, 90, 100, 0.1) 100%);
+  border-color: rgba(255, 120, 130, 0.5);
+}
+
+/* Light theme */
+:root[data-studytrack-theme="light"] .sidebar .account-btn {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.55) 100%);
+  border-color: rgba(23, 32, 51, 0.14);
+  box-shadow: inset 0 1px 0 #fff, 0 3px 10px rgba(23, 32, 51, 0.08);
+}
+:root[data-studytrack-theme="light"] .sidebar .account-btn:hover {
+  background: linear-gradient(180deg, #fff 0%, rgba(255, 255, 255, 0.75) 100%);
+  border-color: rgba(23, 32, 51, 0.24);
+}
+:root[data-studytrack-theme="light"] .sidebar .account-btn--signout {
+  color: var(--red);
+  background: linear-gradient(180deg, rgba(194, 65, 65, 0.14) 0%, rgba(194, 65, 65, 0.05) 100%);
+  border-color: rgba(194, 65, 65, 0.3);
+}
