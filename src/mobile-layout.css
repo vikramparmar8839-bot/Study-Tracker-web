@@ -17,7 +17,7 @@
     --m-gap: 12px;
     --m-side: 14px;
     --m-nav: 56px;
-    --m-nav-gap: 10px;   /* space between floating nav and screen edge */
+    --m-nav-gap: 5px;   /* space between floating nav and screen edge */
   }
 
   /* ---------- Replace drawer + hamburger ---------- */
