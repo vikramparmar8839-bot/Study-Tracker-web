@@ -944,3 +944,68 @@ body::before {
   --lg-shadow: 0 0 0 1px rgba(40,52,110,.06), 0 2px 4px rgba(40,52,110,.05), 0 10px 26px rgba(60,72,150,.15);
   --lg-shadow-hover: 0 0 0 1px rgba(79,70,229,.14), 0 14px 32px rgba(79,70,229,.20);
 }
+
+/* =========================================================
+   CALM PASS (dark theme) — same glass, easier on the eyes
+   Delete this block to go back to the previous look.
+   ========================================================= */
+:root:not([data-studytrack-theme="light"]) {
+  --muted: #b3bdcd;
+  --faint: #929db0;
+  --lg-fill-strong: linear-gradient(150deg, rgba(170,190,255,.11), rgba(110,130,215,.05));
+  --lg-border: rgba(205,218,255,.17);
+  --lg-edge: inset 1px 1px 0 rgba(205,218,255,.24), inset -1px -1px 0 rgba(150,175,255,.08);
+}
+
+/* three soft glows, the main one following the chosen accent */
+:root:not([data-studytrack-theme="light"]) body::before {
+  background-image:
+    radial-gradient(42rem 36rem at 10% 6%,  rgba(var(--accent-rgb),.40), transparent 70%),
+    radial-gradient(36rem 32rem at 90% 10%, rgba(34,211,238,.22), transparent 70%),
+    radial-gradient(42rem 36rem at 85% 94%, rgba(99,102,241,.32), transparent 70%);
+}
+
+/* translucent cards with a soft glass rim */
+:root:root:root:not([data-studytrack-theme="light"]) :is(
+  .stat-card, .panel, .attendance-card, .add-form, .syllabus-upload,
+  .syllabus-progress-card, .syllabus-overall-card, .syllabus-subject-card,
+  .focus-card, .productivity-mini-card, .dashboard-welcome, .streak-card
+) {
+  background: linear-gradient(150deg, rgba(170,190,255,.12), rgba(110,130,215,.04) 55%, rgba(150,175,255,.08));
+  border-color: var(--lg-border);
+  box-shadow: var(--lg-edge), var(--lg-shadow);
+}
+
+:root:root:root:not([data-studytrack-theme="light"]) :is(
+  .stat-card, .attendance-card, .syllabus-subject-card:not(.selected)
+):hover {
+  background: linear-gradient(150deg, rgba(185,202,255,.18), rgba(120,140,225,.07) 55%, rgba(165,190,255,.12));
+  border-color: rgba(205,218,255,.30);
+}
+
+:root:root:root:not([data-studytrack-theme="light"]) .syllabus-subject-card.selected {
+  background: rgba(var(--accent-rgb),.16);
+  border-color: var(--accent);
+}
+
+/* remove the glossy corner shine */
+:root:not([data-studytrack-theme="light"]) :is(
+  .stat-card, .panel, .attendance-card, .focus-card,
+  .productivity-mini-card, .dashboard-welcome
+)::before {
+  background: none;
+}
+
+/* brighter small text */
+:root:not([data-studytrack-theme="light"]) :is(
+  .stat-card span, .stat-card small, .unit-header span, .syllabus-subject-card span
+) {
+  color: var(--muted);
+}
+
+/* active page picks up the accent colour */
+:root:not([data-studytrack-theme="light"]) .sidebar nav .active {
+  background: rgba(var(--accent-rgb),.18);
+  border-color: rgba(var(--accent-rgb),.35);
+  box-shadow: none;
+}
