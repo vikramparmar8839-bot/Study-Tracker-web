@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import { usePomodoro, POMODORO_STORAGE_KEY } from "./PomodoroTimer";
 import "./index.css";
+import "./mobile-layout.css";
 import { useAuth } from "./context/AuthContext";
 import Leaderboard from "./pages/Leaderboard";
 import Friends from "./pages/Friends";
@@ -63,7 +64,7 @@ function App() {
     signOut();
   }
   const [page, setPage] = useState("dashboard");
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const [subjects, setSubjects] = useState(() => {
     try {
@@ -855,7 +856,7 @@ function App() {
 
   function navigateTo(nextPage) {
     setPage(nextPage);
-    setMobileNavOpen(false);
+    setMoreOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -888,15 +889,21 @@ function App() {
     ["settings", "⚙️ Settings"],
   ];
 
+  // Mobile bottom bar: the four most-used pages, everything else under "More"
+  const MOBILE_TABS = [
+    ["dashboard", "🏠", "Home"],
+    ["attendance", "📊", "Attendance"],
+    ["syllabus", "📚", "Syllabus"],
+    ["timetable", "🗓️", "Timetable"],
+  ];
+  const MORE_KEYS = ["statistics", "leaderboard", "friends", "groups", "settings"];
+  const moreItems = NAV.filter(([key]) => MORE_KEYS.includes(key));
+  const moreActive = MORE_KEYS.includes(page);
+  const pageTitle =
+    NAV.find(([key]) => key === page)?.[1].replace(/^\S+\s/, "") || "StudyTrack";
+
   return (
-    <div className={`app-shell ${mobileNavOpen ? "nav-open" : ""}`}>
-      {mobileNavOpen && (
-        <button
-          className="sidebar-overlay"
-          aria-label="Close navigation"
-          onClick={() => setMobileNavOpen(false)}
-        />
-      )}
+    <div className="app-shell">
 
       <aside className="sidebar">
         <div className="logo">
@@ -952,16 +959,10 @@ function App() {
       </aside>
 
       <main className="main">
-        <button
-          className="mobile-menu-button"
-          aria-label="Open navigation"
-          aria-expanded={mobileNavOpen}
-          onClick={() => setMobileNavOpen(true)}
-        >
-          <span></span>
-          <span></span>
-          <span></span>
-        </button>
+        <header className="mobile-topbar">
+          <div className="mobile-topbar-logo">S</div>
+          <span>{pageTitle}</span>
+        </header>
 
         <div key={page} className="page-transition">
           {page === "dashboard" && (
@@ -1072,7 +1073,89 @@ function App() {
           )}
         </div>
       </main>
-       <NudgeHost soundOn={chatNotify.soundOn} />
+
+      {moreOpen && (
+        <button
+          type="button"
+          className="more-overlay"
+          aria-label="Close menu"
+          onClick={() => setMoreOpen(false)}
+        />
+      )}
+
+      {moreOpen && (
+        <div className="more-sheet" role="dialog" aria-label="More">
+          <div className="more-sheet-grip" />
+          <div className="more-sheet-list">
+            {moreItems.map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                className={page === key ? "active" : ""}
+                onClick={() => navigateTo(key)}
+              >
+                {label}
+                {key === "groups" && chatNotify.total > 0 && (
+                  <span className="nav-badge">{chatNotify.total > 9 ? "9+" : chatNotify.total}</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {profile && (
+            <div className="more-sheet-account">
+              <div>
+                <strong>{profile.display_name}</strong>
+                <div style={{ opacity: 0.65 }}>@{profile.username}</div>
+              </div>
+              <div className="account-actions">
+                <button
+                  type="button"
+                  className="account-btn"
+                  onClick={() => { setMoreOpen(false); changeUsername(); }}
+                >
+                  Change username
+                </button>
+                <button
+                  type="button"
+                  className="account-btn account-btn--signout"
+                  onClick={() => { setMoreOpen(false); handleSignOut(); }}
+                >
+                  Sign out
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <nav className="bottom-nav" aria-label="Main">
+        {MOBILE_TABS.map(([key, icon, label]) => (
+          <button
+            key={key}
+            type="button"
+            className={page === key && !moreOpen ? "active" : ""}
+            onClick={() => navigateTo(key)}
+          >
+            <span className="bottom-nav-icon">{icon}</span>
+            <span className="bottom-nav-label">{label}</span>
+          </button>
+        ))}
+        <button
+          type="button"
+          className={moreOpen || moreActive ? "active" : ""}
+          aria-expanded={moreOpen}
+          onClick={() => setMoreOpen((open) => !open)}
+        >
+          <span className="bottom-nav-icon">
+            ☰
+            {chatNotify.total > 0 && <i className="bottom-nav-dot" />}
+          </span>
+          <span className="bottom-nav-label">More</span>
+        </button>
+      </nav>
+
+      <NudgeHost soundOn={chatNotify.soundOn} />
     </div>
   );
 }

@@ -1,0 +1,286 @@
+/* =========================================================
+   MOBILE LAYOUT — bottom navigation + compact dashboard
+   Imported AFTER index.css. Layout only: no colours or theme
+   tokens are changed. Desktop is untouched (everything mobile
+   lives inside the 650px query; the new elements are hidden
+   by default).
+   ========================================================= */
+
+/* New elements are hidden on desktop */
+.bottom-nav,
+.mobile-topbar,
+.more-sheet,
+.more-overlay { display: none; }
+
+@media (max-width: 650px) {
+  :root {
+    --m-gap: 12px;
+    --m-side: 14px;
+    --m-topbar: 48px;
+    --m-nav: 64px;
+  }
+
+  /* ---------- Replace drawer + hamburger ---------- */
+  .sidebar,
+  .sidebar-overlay,
+  .mobile-menu-button { display: none !important; }
+
+  /* ---------- 1. Slim top bar (content scrolls underneath) ---------- */
+  .mobile-topbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: calc(var(--m-topbar) + env(safe-area-inset-top));
+    padding: env(safe-area-inset-top) var(--m-side) 0;
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: -0.01em;
+  }
+  .mobile-topbar-logo {
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    border-radius: 9px;
+    background: linear-gradient(135deg, var(--accent-light), var(--accent-strong));
+    color: #fff;
+    font-size: 14px;
+    font-weight: 800;
+  }
+
+  /* ---------- 6. Same side margin everywhere, room for both bars ---------- */
+  .app-shell .main {
+    padding:
+      calc(var(--m-topbar) + env(safe-area-inset-top) + var(--m-gap))
+      var(--m-side)
+      calc(var(--m-nav) + env(safe-area-inset-bottom) + 20px);
+  }
+
+  /* ---------- Bottom navigation ---------- */
+  .bottom-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 70;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0;
+    height: calc(var(--m-nav) + env(safe-area-inset-bottom));
+    padding: 6px 6px env(safe-area-inset-bottom);
+    background: color-mix(in srgb, var(--surface) 90%, transparent);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+    border-top: 1px solid var(--border);
+  }
+  .bottom-nav button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-width: 0;
+    min-height: 0;
+    padding: 4px 2px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .bottom-nav button:hover { background: transparent; border-color: transparent; }
+  .bottom-nav button.active {
+    background: var(--accent-soft);
+    color: var(--accent-text);
+  }
+  .bottom-nav-icon {
+    position: relative;
+    font-size: 20px;
+    line-height: 1;
+  }
+  .bottom-nav-label {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .bottom-nav-dot {
+    position: absolute;
+    top: -2px;
+    right: -6px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--red);
+  }
+
+  /* ---------- "More" bottom sheet ---------- */
+  .more-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 75;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: rgba(0, 0, 0, 0.5);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+  }
+  .more-sheet {
+    display: block;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 80;
+    max-height: 82dvh;
+    overflow-y: auto;
+    padding: 8px var(--m-side) calc(var(--m-nav) + env(safe-area-inset-bottom) + 12px);
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-bottom: 0;
+    border-radius: 22px 22px 0 0;
+    box-shadow: 0 -18px 50px rgba(0, 0, 0, 0.35);
+    animation: moreSheetUp 0.24s cubic-bezier(.2, .7, .2, 1) both;
+  }
+  @keyframes moreSheetUp {
+    from { transform: translateY(40px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  .more-sheet-grip {
+    width: 40px;
+    height: 4px;
+    margin: 4px auto 12px;
+    border-radius: 4px;
+    background: var(--border-strong);
+  }
+  .more-sheet-list {
+    display: grid;
+    gap: 4px;
+  }
+  .more-sheet-list button {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 14px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 500;
+    text-align: left;
+  }
+  .more-sheet-list button.active {
+    background: var(--accent-soft);
+    border-color: rgba(var(--accent-rgb), 0.18);
+    color: var(--accent-text);
+  }
+  .more-sheet-account {
+    display: grid;
+    gap: 8px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+  }
+  /* the glass pill styles are scoped to .sidebar, so repeat the basics here */
+  .more-sheet .account-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .more-sheet .account-btn {
+    min-height: 40px;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 12px;
+    background: var(--surface-2);
+  }
+  .more-sheet .account-btn--signout {
+    color: var(--red);
+    background: var(--red-soft);
+    border-color: rgba(240, 128, 128, 0.3);
+  }
+
+  /* ---------- 3. Greeting card smaller ---------- */
+  .dashboard-welcome {
+    margin-bottom: var(--m-gap);
+    padding: 14px 16px;
+  }
+  .dashboard-welcome h2 { font-size: 20px; }
+  .dashboard-welcome p { margin-top: 2px; font-size: 13px; }
+
+  /* ---------- 2. Stat cards: shorter, same 2x2 grid ---------- */
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--m-gap);
+    margin-bottom: var(--m-gap);
+  }
+  .stat-card {
+    min-height: 0;
+    justify-content: flex-start;
+    padding: 12px 14px;
+  }
+  .stat-card strong { margin: 4px 0 0; font-size: 22px; }
+  .stat-card small { margin-top: 2px; font-size: 12px; }
+
+  /* ---------- 4. Daily Goal + This Week side by side ---------- */
+  .productivity-grid,
+  .content-grid {
+    gap: var(--m-gap);
+    margin-bottom: var(--m-gap);
+  }
+  .productivity-side {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--m-gap);
+  }
+  /* anything wider than a single number (the weekly chart, etc.) spans both columns */
+  .productivity-side > :has(.weekchart),
+  .productivity-side > :has(.weekchart-header),
+  .productivity-side > .streak-card { grid-column: 1 / -1; }
+  .productivity-mini-card { padding: 12px 14px; }
+  .productivity-mini-card .mini-value { margin-top: 2px; font-size: 22px; }
+  .productivity-mini-card .mini-sub { margin-top: 2px; }
+
+  /* ---------- 5. Focus mode starts higher ---------- */
+  .focus-card.pomo {
+    margin-top: 40px;          /* room for Mochi */
+    padding: 14px 16px 16px;
+  }
+  .pomo { gap: 10px; }
+  .focus-header h2 { font-size: 18px; }
+  .focus-header p { margin-top: 2px; }
+  .pomo-tabs { padding: 2px; }
+  .pomo-tab { min-height: 38px; padding: 6px 6px; }
+  .pomo-ring { width: min(220px, 64vw); }
+
+  /* ---------- 7. Study Group header + button less bulky ---------- */
+  .panel { padding: 16px; }
+  .panel-header { margin-bottom: 12px; gap: 10px; }
+  .panel-header h2 { font-size: 17px; }
+  .panel-header button,
+  .panel-header .view-button {
+    min-height: 0;
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+}
