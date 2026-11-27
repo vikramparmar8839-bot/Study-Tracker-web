@@ -2978,12 +2978,12 @@ select option:checked {
     transition: opacity 0.14s ease, transform 0.14s ease,
                 overlay 0.14s ease allow-discrete, display 0.14s ease allow-discrete;
   }
-  select::picker(select):popover-open {
+  select:open::picker(select) {
     opacity: 1;
     transform: none;
   }
   @starting-style {
-    select::picker(select):popover-open {
+    select:open::picker(select) {
       opacity: 0;
       transform: translateY(-4px) scale(0.98);
     }
