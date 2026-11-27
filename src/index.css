@@ -2930,3 +2930,109 @@ body {
   background: linear-gradient(180deg, rgba(194, 65, 65, 0.14) 0%, rgba(194, 65, 65, 0.05) 100%);
   border-color: rgba(194, 65, 65, 0.3);
 }
+
+/* =========================================================
+   DROPDOWN (<select>) POLISH
+   The open list is drawn by the browser, which is why it looked
+   like a plain white-blue system menu. Chromium 135+ lets us
+   style it fully via appearance: base-select; other browsers
+   get the best-effort option colours below.
+   ========================================================= */
+
+/* Fallback for every browser: dark, readable options */
+select option {
+  background: var(--surface-2);
+  color: var(--text);
+  padding: 8px 12px;
+}
+select option:checked {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+@supports (appearance: base-select) {
+  select,
+  select::picker(select) {
+    appearance: base-select;
+  }
+
+  /* keep the existing chevron on the button, hide the built-in one */
+  select::picker-icon { display: none; }
+
+  /* The floating list */
+  select::picker(select) {
+    box-sizing: border-box;
+    margin-top: 6px;
+    padding: 6px;
+    border: 1px solid var(--border-strong);
+    border-radius: 14px;
+    background: var(--surface-2);
+    color: var(--text);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    max-height: min(320px, 60vh);
+    overflow-y: auto;
+
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+    transform-origin: top center;
+    transition: opacity 0.14s ease, transform 0.14s ease,
+                overlay 0.14s ease allow-discrete, display 0.14s ease allow-discrete;
+  }
+  select::picker(select):popover-open {
+    opacity: 1;
+    transform: none;
+  }
+  @starting-style {
+    select::picker(select):popover-open {
+      opacity: 0;
+      transform: translateY(-4px) scale(0.98);
+    }
+  }
+
+  /* Each option */
+  select option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--text);
+    font-size: 14px;
+    cursor: pointer;
+    transition: background var(--ease), color var(--ease);
+  }
+  select option:hover,
+  select option:focus-visible {
+    background: var(--hover-bg);
+    outline: none;
+  }
+  select option:checked {
+    background: var(--accent-soft);
+    color: var(--accent-text);
+    font-weight: 600;
+  }
+
+  /* Replace the default tick with a small accent dot on the right */
+  select option::checkmark { display: none; }
+  select option:checked::after {
+    content: "";
+    width: 6px;
+    height: 6px;
+    margin-left: auto;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  select option:disabled { opacity: 0.45; cursor: not-allowed; }
+}
+
+/* Light theme */
+:root[data-studytrack-theme="light"] select option { background: #fff; color: var(--text); }
+@supports (appearance: base-select) {
+  :root[data-studytrack-theme="light"] select::picker(select) {
+    background: #fff;
+    border-color: rgba(23, 32, 51, 0.14);
+    box-shadow: 0 16px 36px rgba(23, 32, 51, 0.16);
+  }
+}
