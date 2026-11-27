@@ -21,6 +21,18 @@ import useTodos, { TODOS_STORAGE_KEY } from "./hooks/useTodos";
 import { DEFAULT_SUBJECTS, DEFAULT_SETTINGS, ACCENT_OPTIONS } from "./constants";
 import { applyLiquidGlass, getLocalDateKey } from "./utils";
 import {
+  LayoutDashboard,
+  BarChart3,
+  BookOpen,
+  CalendarDays,
+  TrendingUp,
+  Trophy,
+  Users,
+  Handshake,
+  Settings as SettingsIcon,
+  Menu,
+} from "lucide-react";
+import {
   parseSyllabus,
   extractPdfText as extractSyllabusText,
   normalizeSyllabus,
@@ -878,30 +890,30 @@ function App() {
   }
 
   const NAV = [
-    ["dashboard", "🏠 Dashboard"],
-    ["attendance", "📊 Attendance"],
-    ["syllabus", "📚 Syllabus"],
-    ["timetable", "🗓️ Timetable"],
-    ["statistics", "📈 Statistics"],
-    ["leaderboard", "🏆 Leaderboard"],
-    ["friends", "👥 Friends"],
-    ["groups", "🤝 Study Groups"],
-    ["settings", "⚙️ Settings"],
+    ["dashboard", "Dashboard", LayoutDashboard],
+    ["attendance", "Attendance", BarChart3],
+    ["syllabus", "Syllabus", BookOpen],
+    ["timetable", "Timetable", CalendarDays],
+    ["statistics", "Statistics", TrendingUp],
+    ["leaderboard", "Leaderboard", Trophy],
+    ["friends", "Friends", Users],
+    ["groups", "Study Groups", Handshake],
+    ["settings", "Settings", SettingsIcon],
   ];
 
   // Mobile bottom bar: the four most-used pages, everything else under "More"
   const MOBILE_TABS = [
-    ["dashboard", "🏠", "Home"],
-    ["groups", "🤝", "Groups"],
-    ["syllabus", "📚", "Syllabus"],
-    ["timetable", "🗓️", "Timetable"],
+    ["dashboard", LayoutDashboard, "Home"],
+    ["groups", Handshake, "Groups"],
+    ["syllabus", BookOpen, "Syllabus"],
+    ["timetable", CalendarDays, "Timetable"],
   ];
   const MORE_KEYS = ["statistics", "leaderboard", "friends", "attendance", "settings"];
   // keeps the "More" menu in the same order as MORE_KEYS
   const moreItems = MORE_KEYS.map((key) => NAV.find(([navKey]) => navKey === key));
   const moreActive = MORE_KEYS.includes(page);
   const pageTitle =
-    NAV.find(([key]) => key === page)?.[1].replace(/^\S+\s/, "") || "StudyTrack";
+    NAV.find(([key]) => key === page)?.[1] || "StudyTrack";
 
   return (
     <div className="app-shell">
@@ -916,13 +928,14 @@ function App() {
         </div>
 
         <nav>
-          {NAV.map(([key, label]) => (
+          {NAV.map(([key, label, Icon]) => (
             <button
               key={key}
               className={page === key ? "active" : ""}
               onClick={() => navigateTo(key)}
             >
-              {label}
+              <Icon size={18} strokeWidth={2} aria-hidden="true" />
+              <span>{label}</span>
               {key === "groups" && chatNotify.total > 0 && (
                 <span className="nav-badge">{chatNotify.total > 9 ? "9+" : chatNotify.total}</span>
               )}
@@ -1088,14 +1101,15 @@ function App() {
         <div className="more-sheet" role="dialog" aria-label="More">
           <div className="more-sheet-grip" />
           <div className="more-sheet-list">
-            {moreItems.map(([key, label]) => (
+            {moreItems.map(([key, label, Icon]) => (
               <button
                 key={key}
                 type="button"
                 className={page === key ? "active" : ""}
                 onClick={() => navigateTo(key)}
               >
-                {label}
+                <Icon size={18} strokeWidth={2} aria-hidden="true" />
+                <span>{label}</span>
                 {key === "groups" && chatNotify.total > 0 && (
                   <span className="nav-badge">{chatNotify.total > 9 ? "9+" : chatNotify.total}</span>
                 )}
@@ -1131,7 +1145,7 @@ function App() {
       )}
 
       <nav className="bottom-nav" aria-label="Main">
-        {MOBILE_TABS.map(([key, icon, label]) => (
+        {MOBILE_TABS.map(([key, Icon, label]) => (
           <button
             key={key}
             type="button"
@@ -1139,7 +1153,7 @@ function App() {
             onClick={() => navigateTo(key)}
           >
             <span className="bottom-nav-icon">
-              {icon}
+              <Icon size={22} strokeWidth={2} aria-hidden="true" />
               {key === "groups" && chatNotify.total > 0 && <i className="bottom-nav-dot" />}
             </span>
             <span className="bottom-nav-label">{label}</span>
@@ -1152,7 +1166,7 @@ function App() {
           onClick={() => setMoreOpen((open) => !open)}
         >
           <span className="bottom-nav-icon">
-            ☰
+            <Menu size={22} strokeWidth={2} aria-hidden="true" />
           </span>
           <span className="bottom-nav-label">More</span>
         </button>

@@ -3036,3 +3036,24 @@ select option:checked {
     box-shadow: 0 16px 36px rgba(23, 32, 51, 0.16);
   }
 }
+.sidebar nav button,
+.more-sheet-list button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sidebar nav button svg,
+.more-sheet-list button svg {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.sidebar nav button.active svg,
+.more-sheet-list button.active svg {
+  opacity: 1;
+}
+
+.nav-badge {
+  margin-left: auto;
+}
