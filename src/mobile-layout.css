@@ -44,10 +44,19 @@
     gap: 0;
     height: calc(var(--m-nav) + env(safe-area-inset-bottom));
     padding: 4px 6px env(safe-area-inset-bottom);
-    background: color-mix(in srgb, var(--surface) 90%, transparent);
-    -webkit-backdrop-filter: blur(16px);
-    backdrop-filter: blur(16px);
-    border-top: 1px solid var(--border);
+    /* glass: translucent tint + sheen, strong blur so content behind is unreadable */
+    background-color: color-mix(in srgb, var(--surface) 60%, transparent);
+    background-image: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--text) 9%, transparent),
+      color-mix(in srgb, var(--text) 2%, transparent)
+    );
+    -webkit-backdrop-filter: blur(24px) saturate(170%);
+    backdrop-filter: blur(24px) saturate(170%);
+    border-top: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+    box-shadow:
+      0 -10px 30px rgba(0, 0, 0, 0.22),
+      inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent);
   }
   .bottom-nav button {
     display: flex;
@@ -88,6 +97,7 @@
   /* active indicator: a small pill behind the icon only */
   .bottom-nav button.active .bottom-nav-icon {
     background: var(--accent-soft);
+    box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.22);
   }
   .bottom-nav-label {
     max-width: 100%;
@@ -265,11 +275,6 @@
   }
 }
 @media (max-width: 650px) {
-  /* Solid bottom bar */
-  .app-shell .bottom-nav {
-    background: var(--surface) !important;
-  }
-
   /* Smaller greeting and stat cards */
   .app-shell .dashboard-welcome { padding: 10px 14px; }
   .app-shell .dashboard-welcome h2 { font-size: 18px; }
