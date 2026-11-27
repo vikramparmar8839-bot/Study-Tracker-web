@@ -16,7 +16,7 @@
   :root {
     --m-gap: 12px;
     --m-side: 14px;
-    --m-nav: 64px;
+    --m-nav: 56px;
   }
 
   /* ---------- Replace drawer + hamburger ---------- */
@@ -43,7 +43,7 @@
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 0;
     height: calc(var(--m-nav) + env(safe-area-inset-bottom));
-    padding: 6px 6px env(safe-area-inset-bottom);
+    padding: 4px 6px env(safe-area-inset-bottom);
     background: color-mix(in srgb, var(--surface) 90%, transparent);
     -webkit-backdrop-filter: blur(16px);
     backdrop-filter: blur(16px);
@@ -65,16 +65,29 @@
     color: var(--muted);
     font-size: 11px;
     font-weight: 600;
+    -webkit-tap-highlight-color: transparent;
+    transition: color 0.18s ease, transform 0.12s ease;
   }
   .bottom-nav button:hover { background: transparent; border-color: transparent; }
+  .bottom-nav button:active { transform: scale(0.94); }
   .bottom-nav button.active {
-    background: var(--accent-soft);
+    background: transparent;
     color: var(--accent-text);
   }
   .bottom-nav-icon {
     position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 18px;
+    border-radius: 999px;
     font-size: 20px;
     line-height: 1;
+    transition: background 0.18s ease;
+  }
+  /* active indicator: a small pill behind the icon only */
+  .bottom-nav button.active .bottom-nav-icon {
+    background: var(--accent-soft);
   }
   .bottom-nav-label {
     max-width: 100%;
@@ -84,8 +97,8 @@
   }
   .bottom-nav-dot {
     position: absolute;
-    top: -2px;
-    right: -6px;
+    top: 2px;
+    right: 12px;
     width: 8px;
     height: 8px;
     border-radius: 50%;
