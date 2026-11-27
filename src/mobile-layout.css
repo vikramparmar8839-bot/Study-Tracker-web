@@ -284,3 +284,27 @@
     font-size: 13px;
   }
 }
+@media (max-width: 650px) {
+  /* Solid bottom bar */
+  .app-shell .bottom-nav {
+    background: var(--surface) !important;
+  }
+
+  /* Smaller greeting and stat cards */
+  .app-shell .dashboard-welcome { padding: 10px 14px; }
+  .app-shell .dashboard-welcome h2 { font-size: 18px; }
+  .app-shell .dashboard-welcome p { display: none; }
+  .app-shell .stat-card { min-height: 0; padding: 9px 12px; }
+  .app-shell .stat-card strong { margin-top: 2px; font-size: 20px; }
+
+  /* Smaller timer */
+  .app-shell .pomo .pomo-ring { width: min(180px, 52vw); }
+  .app-shell .pomo .pomo-time { font-size: 40px; }
+
+  /* Clear selected tab */
+  .app-shell .pomo .pomo-tab.active {
+    background: var(--accent-soft) !important;
+    border-color: var(--accent) !important;
+    color: var(--text);
+  }
+}
